@@ -1,0 +1,643 @@
+<title>灯台守の夜</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* Layout: 画面いっぱいの夜の海キャンバス．HUDは上端に浮かせ，開始・終了画面は中央のカード一枚． */
+:root {
+  --night: #060c18;
+  --sea: #0c1a2c;
+  --beam: #ffe7a3;
+  --lamp: #ffb04a;
+  --foam: #cfe2ee;
+  --danger: #ff6a5c;
+  --ink: #e8eef6;
+  --muted: #8aa0b8;
+  --card: rgba(9, 18, 33, 0.86);
+  --line: rgba(207, 226, 238, 0.16);
+  --display: "Dela Gothic One", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--night);
+  color: var(--ink);
+  font-family: var(--body);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+
+.hud {
+  position: fixed; top: 0; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat .label { font-size: 11px; letter-spacing: 0.14em; color: var(--muted); }
+.stat .value { font-family: var(--display); font-size: 28px; line-height: 1; color: var(--beam); }
+.stat.right { align-items: flex-end; }
+.lives { display: flex; gap: 6px; margin-top: 4px; }
+.lives span {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--lamp); box-shadow: 0 0 10px var(--lamp);
+  transition: background .3s, box-shadow .3s;
+}
+.lives span.out { background: #2a3546; box-shadow: none; }
+.combo { font-size: 13px; color: var(--lamp); min-height: 1.2em; margin-top: 4px; letter-spacing: 0.06em; }
+.sound {
+  pointer-events: auto;
+  margin-top: 8px;
+  font: 700 12px var(--body);
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.sound:focus-visible, .btn:focus-visible { outline: 2px solid var(--beam); outline-offset: 3px; }
+
+.overlay {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  padding-block: 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: radial-gradient(ellipse at center, rgba(6,12,24,0.2), rgba(6,12,24,0.7));
+}
+.card {
+  width: min(440px, 100%);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 28px 24px 24px;
+  display: flex; flex-direction: column; gap: 16px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.eyebrow { font-size: 11px; letter-spacing: 0.24em; color: var(--muted); }
+h1 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(34px, 9vw, 46px); line-height: 1.1;
+  margin: 0; color: var(--beam);
+  text-shadow: 0 0 24px rgba(255, 231, 163, 0.35);
+  text-wrap: balance;
+}
+.lead { margin: 0; line-height: 1.8; font-size: 15px; }
+.rules { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.rules li { display: grid; grid-template-columns: 4.5em 1fr; gap: 8px; }
+.rules b { color: var(--ink); font-weight: 700; }
+.ships { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ship { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+.ship b { font-size: 14px; }
+.ship .sw { display: inline-block; width: 18px; height: 6px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+.btn {
+  font: 400 18px var(--display);
+  color: var(--night);
+  background: var(--beam);
+  border: 0; border-radius: 4px;
+  padding: 14px 18px;
+  cursor: pointer;
+  box-shadow: 0 0 28px rgba(255, 231, 163, 0.35);
+  transition: transform .15s;
+}
+.btn:hover { transform: translateY(-1px); }
+.result { display: flex; gap: 24px; font-variant-numeric: tabular-nums; }
+.result .value { font-family: var(--display); font-size: 36px; color: var(--beam); line-height: 1.1; }
+.result .label { font-size: 11px; letter-spacing: 0.14em; color: var(--muted); }
+.newbest { color: var(--lamp); font-weight: 700; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+</style>
+
+<canvas id="game" aria-label="灯台の光で船を導くゲーム画面"></canvas>
+
+<div class="hud">
+  <div class="stat">
+    <span class="label">導いた船</span>
+    <span class="value" id="score">0</span>
+    <span class="combo" id="combo"></span>
+  </div>
+  <div class="stat right">
+    <span class="label">灯火</span>
+    <div class="lives" id="lives"><span></span><span></span><span></span></div>
+    <button class="sound" id="sound" type="button">音 オン</button>
+  </div>
+</div>
+
+<div class="overlay" id="titleScreen">
+  <div class="card">
+    <span class="eyebrow">NIGHT WATCH · 第一夜</span>
+    <h1>灯台守の夜</h1>
+    <p class="lead">真っ暗な海を船が岩礁へ向かってくる．灯台の光を当てて，暗礁に気づかせよう．</p>
+    <ul class="rules">
+      <li><b>照らす</b>マウスを動かす／画面をなぞる／← →キー</li>
+      <li><b>救う</b>光を当て続けてゲージが満ちると船は進路を変える</li>
+      <li><b>失う</b>岩礁にぶつかると灯火がひとつ消える．三つで夜明け</li>
+    </ul>
+    <div class="ships">
+      <div class="ship"><b><span class="sw" style="background:#d9e4ee"></span>小舟</b>速い・すぐ気づく<br>1点</div>
+      <div class="ship"><b><span class="sw" style="background:#8fd0c0"></span>漁船</b>ふつう<br>2点</div>
+      <div class="ship"><b><span class="sw" style="background:#e6a56a"></span>貨物船</b>遅い・鈍い<br>3点</div>
+    </div>
+    <button class="btn" id="startBtn" type="button">灯をともす</button>
+  </div>
+</div>
+
+<div class="overlay" id="overScreen" hidden>
+  <div class="card">
+    <span class="eyebrow">DAWN · 夜明け</span>
+    <h1>夜が明けた</h1>
+    <div class="result">
+      <div><div class="value" id="finalScore">0</div><div class="label">得点</div></div>
+      <div><div class="value" id="finalShips">0</div><div class="label">救った船</div></div>
+      <div><div class="value" id="finalBest">0</div><div class="label">最高得点</div></div>
+    </div>
+    <span class="newbest" id="newBest" hidden>最高得点を更新しました</span>
+    <button class="btn" id="retryBtn" type="button">もう一晩見張る</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- geometry ----------
+  let W, H, DPR, cx, cy, S, REEF, ISLE, FAR;
+  let rocks = [], sparkles = [];
+  const HW = 0.17;          // 光の半角 (rad)
+  const ROT = 3.4;          // 灯台の回転速度 (rad/s)
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function angNorm(a) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
+
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx = W / 2; cy = H / 2 + Math.min(30, H * 0.03);
+    S = Math.min(W, H) / 2;
+    REEF = S * 0.3; ISLE = S * 0.1;
+    FAR = Math.hypot(W, H) / 2 + 40;
+    rocks = [];
+    const n = 28;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rand(-0.06, 0.06);
+      const r = REEF + rand(-0.025, 0.03) * S;
+      const size = rand(0.022, 0.042) * S;
+      const pts = [];
+      const k = 7;
+      for (let j = 0; j < k; j++) pts.push(size * rand(0.6, 1));
+      rocks.push({ a, r, size, pts, rot: rand(0, 6.28) });
+    }
+    sparkles = [];
+    const count = Math.round((W * H) / 9000);
+    for (let i = 0; i < count; i++) sparkles.push({ x: rand(0, W), y: rand(0, H), l: rand(4, 12), p: rand(0, 6.28), s: rand(4, 10) });
+  }
+
+  // ---------- state ----------
+  const TYPES = {
+    boat:    { len: 0.05, wid: 0.02,  speed: 1.35, need: 0.45, color: '#d9e4ee', pts: 1, name: '小舟' },
+    trawler: { len: 0.075, wid: 0.028, speed: 1.0, need: 0.8,  color: '#8fd0c0', pts: 2, name: '漁船' },
+    tanker:  { len: 0.12, wid: 0.036, speed: 0.7, need: 1.35, color: '#e6a56a', pts: 3, name: '貨物船' },
+  };
+  let state = 'title';
+  let ships = [], parts = [], texts = [];
+  let beamA = -Math.PI / 2, targetA = -Math.PI / 2;
+  let score = 0, saved = 0, lives = 3, combo = 0, lastSave = -10;
+  let t = 0, playT = 0, spawnT = 1.2, shake = 0;
+  let keyDir = 0, usingKeys = false;
+  let best = 0;
+  try { best = parseInt(localStorage.getItem('lighthouse-best') || '0', 10) || 0; } catch (e) {}
+
+  function difficulty() { return Math.min(2.4, 1 + playT / 55); }
+
+  function spawnShip() {
+    const p = playT;
+    let kind = 'trawler';
+    const r = Math.random();
+    if (p > 20 && r < 0.25) kind = 'tanker';
+    else if (r < 0.62) kind = 'boat';
+    else kind = 'trawler';
+    if (p < 8) kind = 'trawler';
+    const T = TYPES[kind];
+    // 直近の船と同じ方向を避ける
+    let a, tries = 0;
+    do {
+      a = rand(-Math.PI, Math.PI); tries++;
+    } while (tries < 8 && ships.some(s => !s.saved && Math.abs(angNorm(Math.atan2(s.y - cy, s.x - cx) - a)) < 0.35));
+    const x = cx + Math.cos(a) * FAR, y = cy + Math.sin(a) * FAR;
+    const tx = cx + rand(-1, 1) * ISLE * 0.6, ty = cy + rand(-1, 1) * ISLE * 0.6;
+    const heading = Math.atan2(ty - y, tx - x);
+    ships.push({
+      kind, T, x, y, heading,
+      v: T.speed * S * 0.15 * difficulty(),
+      lit: 0, glow: 0, saved: false, turnTo: 0, bob: rand(0, 6.28),
+    });
+  }
+
+  function reset() {
+    ships = []; parts = []; texts = [];
+    score = 0; saved = 0; lives = 3; combo = 0; lastSave = -10;
+    playT = 0; spawnT = 0.8;
+    updateHud();
+  }
+
+  function updateHud() {
+    $('score').textContent = score;
+    const ls = $('lives').children;
+    for (let i = 0; i < 3; i++) ls[i].classList.toggle('out', i >= lives);
+    $('combo').textContent = combo >= 2 ? `連続 ×${combo}` : '';
+  }
+
+  // ---------- audio ----------
+  let actx = null, soundOn = true;
+  try { soundOn = localStorage.getItem('lighthouse-sound') !== 'off'; } catch (e) {}
+  $('sound').textContent = soundOn ? '音 オン' : '音 オフ';
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (actx && actx.state === 'suspended') actx.resume();
+  }
+  function tone(freq, start, dur, vol = 0.12, type = 'sine') {
+    if (!actx || !soundOn) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.value = freq;
+    const t0 = actx.currentTime + start;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(actx.destination);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  function chime(c) {
+    const base = 523.25 * Math.pow(2, Math.min(c, 6) / 12);
+    tone(base, 0, 0.5); tone(base * 1.5, 0.08, 0.6, 0.09);
+  }
+  function crash() {
+    if (!actx || !soundOn) return;
+    const len = actx.sampleRate * 0.6;
+    const buf = actx.createBuffer(1, len, actx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const src = actx.createBufferSource(); src.buffer = buf;
+    const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+    const g = actx.createGain(); g.gain.value = 0.35;
+    src.connect(f).connect(g).connect(actx.destination); src.start();
+    tone(80, 0, 0.5, 0.2, 'triangle');
+  }
+  $('sound').addEventListener('click', () => {
+    soundOn = !soundOn;
+    $('sound').textContent = soundOn ? '音 オン' : '音 オフ';
+    try { localStorage.setItem('lighthouse-sound', soundOn ? 'on' : 'off'); } catch (e) {}
+    if (soundOn) ensureAudio();
+  });
+
+  // ---------- input ----------
+  function aimAt(x, y) { targetA = Math.atan2(y - cy, x - cx); usingKeys = false; }
+  cv.addEventListener('pointermove', e => aimAt(e.clientX, e.clientY));
+  cv.addEventListener('pointerdown', e => { aimAt(e.clientX, e.clientY); });
+  addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { keyDir = -1; usingKeys = true; e.preventDefault(); }
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { keyDir = 1; usingKeys = true; e.preventDefault(); }
+    if ((e.key === 'Enter' || e.key === ' ') && state !== 'play') { e.preventDefault(); start(); }
+  });
+  addEventListener('keyup', e => {
+    if (['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].includes(e.key)) keyDir = 0;
+  });
+
+  function start() {
+    ensureAudio();
+    reset();
+    state = 'play';
+    $('titleScreen').hidden = true;
+    $('overScreen').hidden = true;
+  }
+  $('startBtn').addEventListener('click', start);
+  $('retryBtn').addEventListener('click', start);
+
+  function gameOver() {
+    state = 'over';
+    const isBest = score > best;
+    if (isBest) { best = score; try { localStorage.setItem('lighthouse-best', String(best)); } catch (e) {} }
+    $('finalScore').textContent = score;
+    $('finalShips').textContent = saved;
+    $('finalBest').textContent = best;
+    $('newBest').hidden = !isBest;
+    setTimeout(() => { if (state === 'over') $('overScreen').hidden = false; }, 900);
+  }
+
+  // ---------- update ----------
+  function update(dt) {
+    t += dt;
+    // 灯台の回転
+    if (state === 'title') targetA = beamA + 1;
+    if (usingKeys && keyDir) targetA = beamA + keyDir * 1;
+    const d = angNorm(targetA - beamA);
+    const rot = state === 'title' ? 0.5 : ROT;
+    const step = rot * dt;
+    beamA = angNorm(beamA + Math.max(-step, Math.min(step, d)));
+
+    if (state === 'play') {
+      playT += dt;
+      spawnT -= dt;
+      if (spawnT <= 0) {
+        spawnShip();
+        const interval = Math.max(0.75, 2.8 - playT * 0.028);
+        spawnT = interval * rand(0.75, 1.25);
+        if (playT > 45 && Math.random() < 0.2) spawnT *= 0.4;
+      }
+      if (combo && t - lastSave > 2.2) { combo = 0; updateHud(); }
+    }
+
+    for (let i = ships.length - 1; i >= 0; i--) {
+      const s = ships[i];
+      const dx = s.x - cx, dy = s.y - cy;
+      const dist = Math.hypot(dx, dy);
+      const phi = Math.atan2(dy, dx);
+      const halfLenAng = (s.T.len * S * 0.5) / Math.max(dist, 1);
+      const inBeam = Math.abs(angNorm(phi - beamA)) < HW + halfLenAng && dist > ISLE;
+      s.inBeam = inBeam;
+      s.glow = inBeam ? Math.min(1, s.glow + dt * 6) : Math.max(0, s.glow - dt * 1.5);
+
+      if (!s.saved && state === 'play') {
+        if (inBeam) s.lit += dt;
+        if (s.lit >= s.T.need) {
+          s.saved = true;
+          // 接線方向へ．光の当たっている側に舵を切る
+          const side = angNorm(phi - beamA) >= 0 ? 1 : -1;
+          s.turnTo = phi + side * (Math.PI / 2 - 0.45);
+          if (t - lastSave < 2.2) combo++; else combo = 1;
+          lastSave = t;
+          const mult = Math.min(combo, 5);
+          const gained = s.T.pts * mult;
+          score += gained; saved++;
+          texts.push({ x: s.x, y: s.y, txt: mult > 1 ? `+${gained}  ×${mult}` : `+${gained}`, life: 1.2 });
+          chime(combo);
+          updateHud();
+        }
+      }
+      if (s.saved) {
+        const dh = angNorm(s.turnTo - s.heading);
+        s.heading += Math.max(-4 * dt, Math.min(4 * dt, dh));
+        s.v = Math.min(s.v * (1 + dt * 0.6), s.T.speed * S * 0.5);
+      }
+      s.x += Math.cos(s.heading) * s.v * dt;
+      s.y += Math.sin(s.heading) * s.v * dt;
+      s.bob += dt * 2;
+
+      if (!s.saved && dist < REEF + s.T.len * S * 0.25) {
+        // 座礁
+        ships.splice(i, 1);
+        wreck(s);
+        continue;
+      }
+      if (s.saved && dist > FAR + 60) ships.splice(i, 1);
+      if (!s.saved && state !== 'play' && dist > FAR + 60) ships.splice(i, 1);
+    }
+
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.life -= dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx *= 1 - dt * 2; p.vy *= 1 - dt * 2;
+      if (p.life <= 0) parts.splice(i, 1);
+    }
+    for (let i = texts.length - 1; i >= 0; i--) {
+      texts[i].life -= dt; texts[i].y -= dt * 30;
+      if (texts[i].life <= 0) texts.splice(i, 1);
+    }
+    shake = Math.max(0, shake - dt * 30);
+  }
+
+  function wreck(s) {
+    crash();
+    shake = reduceMotion ? 0 : 10;
+    for (let k = 0; k < 26; k++) {
+      const a = rand(0, 6.28), sp = rand(20, 120);
+      parts.push({ x: s.x, y: s.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.6, 1.4), max: 1.4,
+        c: k < 10 ? s.T.color : (k < 18 ? '#ff8a4a' : '#cfe2ee'), r: rand(1.5, 3.5) });
+    }
+    texts.push({ x: s.x, y: s.y, txt: `${s.T.name}が座礁`, life: 1.4, bad: true });
+    if (state === 'play') {
+      lives--; combo = 0;
+      updateHud();
+      if (lives <= 0) gameOver();
+    }
+  }
+
+  // ---------- draw ----------
+  function inBeamAt(x, y) {
+    const a = Math.atan2(y - cy, x - cx);
+    const dd = Math.abs(angNorm(a - beamA));
+    return dd < HW ? 1 - dd / HW : 0;
+  }
+
+  function draw() {
+    ctx.save();
+    if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+
+    // 海
+    const sea = ctx.createRadialGradient(cx, cy, 0, cx, cy, FAR);
+    sea.addColorStop(0, '#12253b');
+    sea.addColorStop(0.45, '#0b182a');
+    sea.addColorStop(1, '#050a15');
+    ctx.fillStyle = sea;
+    ctx.fillRect(-20, -20, W + 40, H + 40);
+
+    // 波のきらめき
+    ctx.lineCap = 'round';
+    for (const sp of sparkles) {
+      const x = (sp.x + t * sp.s) % (W + 20) - 10;
+      const lit = inBeamAt(x, sp.y);
+      const dist = Math.hypot(x - cx, sp.y - cy);
+      const near = Math.max(0, 1 - dist / (S * 0.9));
+      const a = 0.05 + 0.05 * Math.sin(t * 1.5 + sp.p) + lit * 0.45 + near * 0.08;
+      ctx.strokeStyle = `rgba(207,226,238,${a.toFixed(3)})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x, sp.y);
+      ctx.quadraticCurveTo(x + sp.l / 2, sp.y - 2, x + sp.l, sp.y);
+      ctx.stroke();
+    }
+
+    // 光の帯
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(cx, cy, ISLE * 0.2, cx, cy, FAR);
+    g.addColorStop(0, 'rgba(255,231,163,0.45)');
+    g.addColorStop(0.35, 'rgba(255,225,150,0.16)');
+    g.addColorStop(1, 'rgba(255,225,150,0.0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, FAR, beamA - HW, beamA + HW); ctx.closePath(); ctx.fill();
+    const g2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, FAR * 0.8);
+    g2.addColorStop(0, 'rgba(255,240,200,0.4)');
+    g2.addColorStop(1, 'rgba(255,240,200,0)');
+    ctx.fillStyle = g2;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, FAR, beamA - HW * 0.4, beamA + HW * 0.4); ctx.closePath(); ctx.fill();
+    // 島まわりのぼんやりした明かり
+    const amb = ctx.createRadialGradient(cx, cy, ISLE, cx, cy, REEF * 1.6);
+    amb.addColorStop(0, 'rgba(255,200,120,0.10)');
+    amb.addColorStop(1, 'rgba(255,200,120,0)');
+    ctx.fillStyle = amb;
+    ctx.beginPath(); ctx.arc(cx, cy, REEF * 1.6, 0, 6.29); ctx.fill();
+    ctx.restore();
+
+    // 岩礁
+    for (const r of rocks) {
+      const x = cx + Math.cos(r.a) * r.r, y = cy + Math.sin(r.a) * r.r;
+      const lit = inBeamAt(x, y);
+      ctx.save();
+      ctx.translate(x, y); ctx.rotate(r.rot);
+      ctx.beginPath();
+      r.pts.forEach((len, j) => {
+        const a = (j / r.pts.length) * Math.PI * 2;
+        const px = Math.cos(a) * len, py = Math.sin(a) * len;
+        j ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      });
+      ctx.closePath();
+      const foam = 0.18 + 0.12 * Math.sin(t * 2 + r.a * 3) + lit * 0.4;
+      ctx.strokeStyle = `rgba(207,226,238,${foam.toFixed(3)})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = lit > 0 ? `rgb(${50 + lit * 60 | 0},${58 + lit * 55 | 0},${70 + lit * 45 | 0})` : '#1a2533';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 島
+    ctx.fillStyle = '#1f2f2a';
+    ctx.beginPath(); ctx.arc(cx, cy, ISLE, 0, 6.29); ctx.fill();
+    ctx.strokeStyle = 'rgba(207,226,238,0.25)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#2b3f36';
+    ctx.beginPath(); ctx.arc(cx - ISLE * 0.15, cy + ISLE * 0.1, ISLE * 0.7, 0, 6.29); ctx.fill();
+    // 灯台（真上から）
+    const tr = ISLE * 0.42;
+    ctx.fillStyle = '#e8eef6'; ctx.beginPath(); ctx.arc(cx, cy, tr, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#c8473c'; ctx.beginPath(); ctx.arc(cx, cy, tr * 0.72, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#e8eef6'; ctx.beginPath(); ctx.arc(cx, cy, tr * 0.48, 0, 6.29); ctx.fill();
+    const lampG = ctx.createRadialGradient(cx, cy, 0, cx, cy, tr * 1.4);
+    lampG.addColorStop(0, 'rgba(255,245,210,1)');
+    lampG.addColorStop(0.3, 'rgba(255,231,163,0.9)');
+    lampG.addColorStop(1, 'rgba(255,231,163,0)');
+    ctx.fillStyle = lampG; ctx.beginPath(); ctx.arc(cx, cy, tr * 1.4, 0, 6.29); ctx.fill();
+
+    // 船
+    for (const s of ships) drawShip(s);
+
+    // 破片
+    for (const p of parts) {
+      ctx.globalAlpha = Math.max(0, p.life / p.max);
+      ctx.fillStyle = p.c;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.29); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // 文字
+    ctx.textAlign = 'center';
+    ctx.font = `700 ${Math.max(13, S * 0.045) | 0}px "Zen Kaku Gothic New", sans-serif`;
+    for (const tx of texts) {
+      ctx.globalAlpha = Math.min(1, tx.life * 1.5);
+      ctx.fillStyle = tx.bad ? '#ff6a5c' : '#ffe7a3';
+      ctx.fillText(tx.txt, tx.x, tx.y - 14);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function drawShip(s) {
+    const len = s.T.len * S, wid = s.T.wid * S;
+    const dist = Math.hypot(s.x - cx, s.y - cy);
+    const near = Math.max(0, Math.min(1, 1 - (dist - REEF) / (S * 0.4))) * 0.25;
+    const vis = Math.min(1, 0.06 + s.glow * 0.94 + near);
+
+    // 航跡
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.heading);
+    ctx.strokeStyle = `rgba(207,226,238,${(0.08 + vis * 0.3).toFixed(3)})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-len * 0.5, -wid * 0.4); ctx.lineTo(-len * 1.6, -wid * 1.3);
+    ctx.moveTo(-len * 0.5, wid * 0.4); ctx.lineTo(-len * 1.6, wid * 1.3);
+    ctx.stroke();
+
+    // 船体
+    const wob = Math.sin(s.bob) * 0.03;
+    ctx.rotate(wob);
+    ctx.globalAlpha = vis;
+    ctx.fillStyle = s.T.color;
+    ctx.beginPath();
+    ctx.moveTo(len / 2, 0);
+    ctx.quadraticCurveTo(len * 0.15, -wid / 2, -len / 2, -wid * 0.42);
+    ctx.lineTo(-len / 2, wid * 0.42);
+    ctx.quadraticCurveTo(len * 0.15, wid / 2, len / 2, 0);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(6,12,24,0.55)';
+    if (s.kind === 'tanker') {
+      for (let k = 0; k < 3; k++) ctx.fillRect(-len * 0.3 + k * len * 0.18, -wid * 0.25, len * 0.13, wid * 0.5);
+      ctx.fillStyle = '#e8eef6';
+      ctx.fillRect(-len * 0.46, -wid * 0.3, len * 0.12, wid * 0.6);
+    } else {
+      ctx.fillRect(-len * 0.25, -wid * 0.22, len * 0.3, wid * 0.44);
+    }
+    ctx.globalAlpha = 1;
+
+    // 船尾の灯り（暗くても見える）
+    const lx = -len * 0.42;
+    const lg = ctx.createRadialGradient(lx, 0, 0, lx, 0, wid * 1.2);
+    lg.addColorStop(0, 'rgba(255,176,74,0.95)');
+    lg.addColorStop(1, 'rgba(255,176,74,0)');
+    ctx.fillStyle = lg;
+    ctx.beginPath(); ctx.arc(lx, 0, wid * 1.2, 0, 6.29); ctx.fill();
+    ctx.restore();
+
+    if (!s.saved && state === 'play') {
+      // 危険表示：岩礁まで約2秒以内
+      const eta = (dist - REEF) / Math.max(s.v, 1);
+      if (eta < 2.2 && s.lit < s.T.need) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 12);
+        ctx.strokeStyle = `rgba(255,106,92,${(0.35 + pulse * 0.5).toFixed(3)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(s.x, s.y, len * 0.75, 0, 6.29); ctx.stroke();
+      }
+      // 気づきゲージ
+      if (s.lit > 0) {
+        const f = Math.min(1, s.lit / s.T.need);
+        ctx.strokeStyle = 'rgba(255,231,163,0.25)';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(s.x, s.y, len * 0.62, 0, 6.29); ctx.stroke();
+        ctx.strokeStyle = '#ffe7a3';
+        ctx.beginPath(); ctx.arc(s.x, s.y, len * 0.62, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2); ctx.stroke();
+      }
+    }
+  }
+
+  // ---------- loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener('resize', resize);
+  resize();
+  updateHud();
+  requestAnimationFrame(frame);
+})();
+</script>
