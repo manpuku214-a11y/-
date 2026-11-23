@@ -1,0 +1,986 @@
+<title>パイソン島の冒険</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=JetBrains+Mono:wght@400;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: graph-paper notebook. Left page = lesson, right page = workbench (editor, robot map, console). Stacks on phones. */
+:root {
+  --paper: #F3F6FA;
+  --grid: #DFE7F1;
+  --ink: #16223B;
+  --ink-soft: #4B5A78;
+  --card: #FFFFFF;
+  --line: #CBD6E5;
+  --marker: #FFE14D;
+  --marker-ink: #16223B;
+  --blue: #2B5FD9;
+  --blue-soft: #E3EBFC;
+  --ok: #18915B;
+  --ok-soft: #DDF4E9;
+  --ng: #CF3F37;
+  --ng-soft: #FBE4E2;
+  --code-bg: #101B30;
+  --code-fg: #E8EEF8;
+  --code-muted: #6F7E9C;
+  --code-line: #1E2C47;
+  --tile: #FFFFFF;
+  --wall: #2A3A5C;
+  --font-display: "Dela Gothic One", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-code: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Zen Kaku Gothic New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0F1624; --grid: #182234; --ink: #E6ECF6; --ink-soft: #A2AFC7; --card: #162034; --line: #2A3852;
+    --marker: #EFD23E; --marker-ink: #16223B; --blue: #86A8FF; --blue-soft: #1E2C4C;
+    --ok: #41C98C; --ok-soft: #143326; --ng: #FF7B71; --ng-soft: #3A1D1E;
+    --code-bg: #0A111F; --code-fg: #E8EEF8; --code-muted: #6A7895; --code-line: #18243B;
+    --tile: #1F2C45; --wall: #070C17;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0F1624; --grid: #182234; --ink: #E6ECF6; --ink-soft: #A2AFC7; --card: #162034; --line: #2A3852;
+  --marker: #EFD23E; --marker-ink: #16223B; --blue: #86A8FF; --blue-soft: #1E2C4C;
+  --ok: #41C98C; --ok-soft: #143326; --ng: #FF7B71; --ng-soft: #3A1D1E;
+  --code-bg: #0A111F; --code-fg: #E8EEF8; --code-muted: #6A7895; --code-line: #18243B;
+  --tile: #1F2C45; --wall: #070C17;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { min-height: 100%; }
+body {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.75;
+}
+button { font: inherit; color: inherit; }
+button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+code, .mono { font-family: var(--font-code); }
+
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* ---------- header ---------- */
+.top { padding-block: 18px 10px; }
+.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.brand h1 {
+  font-family: var(--font-display); font-weight: 400; font-size: clamp(22px, 4vw, 30px);
+  margin: 0; line-height: 1.2; letter-spacing: .02em;
+}
+.brand h1 span { background: linear-gradient(transparent 58%, var(--marker) 58%); padding: 0 2px; }
+.brand .sub { font-size: 13px; color: var(--ink-soft); }
+.progress { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.bar { width: 140px; height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--ok); border-radius: inherit; transition: width .5s; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 2px solid var(--ink); background: var(--card); border-radius: 10px;
+  padding: 7px 14px; font-weight: 700; font-size: 15px; cursor: pointer; line-height: 1.3;
+  box-shadow: 0 3px 0 var(--ink); transition: transform .08s, box-shadow .08s;
+}
+.btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.btn.run { background: var(--marker); color: var(--marker-ink); border-color: var(--ink); font-size: 17px; padding: 8px 20px; }
+.btn.ghost { box-shadow: none; border-color: var(--line); background: transparent; font-weight: 500; }
+.btn.ghost:active { transform: none; }
+.btn[disabled] { opacity: .55; cursor: wait; }
+
+/* ---------- stage map ---------- */
+.stagemap { padding-block: 0 8px; }
+.stagemap .wrap { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.chap { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chap b { font-size: 12px; color: var(--ink-soft); font-weight: 700; letter-spacing: .06em; margin-right: 2px; }
+.dot {
+  width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); background: var(--card);
+  font-family: var(--font-code); font-size: 13px; font-weight: 600; cursor: pointer; padding: 0;
+  font-variant-numeric: tabular-nums; color: var(--ink-soft);
+}
+.dot.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.dot.now { border-color: var(--ink); color: var(--ink); box-shadow: 0 0 0 3px var(--marker); }
+.dot.done.now { color: #fff; }
+.dot.locked { opacity: .45; cursor: not-allowed; }
+
+/* ---------- main ---------- */
+main { padding-block: 10px 48px; }
+.layout { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.lesson { background: var(--card); border: 2px solid var(--ink); border-radius: 16px; padding: 22px 22px 24px; min-width: 0; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .12em; color: var(--blue); }
+.lesson h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(22px, 3.2vw, 28px); line-height: 1.35; margin: 2px 0 14px; text-wrap: balance; }
+
+.talk { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: start; margin-bottom: 18px; }
+.talk svg { width: 56px; height: 56px; }
+.bubble { position: relative; background: var(--blue-soft); border-radius: 14px; padding: 10px 14px; font-size: 15.5px; }
+.bubble::before { content: ""; position: absolute; left: -8px; top: 18px; border: 8px solid transparent; border-left: 0; border-right-color: var(--blue-soft); }
+.bubble p { margin: 0 0 6px; } .bubble p:last-child { margin: 0; }
+
+.learn h3, .mission h3 { font-size: 14px; letter-spacing: .08em; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+.learn { margin-bottom: 18px; }
+.learn p { margin: 0 0 10px; max-width: 62ch; }
+.learn ul { margin: 0 0 10px; padding-left: 1.3em; }
+.learn code, .mission code, .bubble code, .hintbox code { background: var(--blue-soft); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+.ex { background: var(--code-bg); color: var(--code-fg); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; font-family: var(--font-code); font-size: 14px; line-height: 1.6; overflow-x: auto; white-space: pre; }
+.ex .c { color: var(--code-muted); }
+.ex .o { color: #9FE3BE; }
+.mission { border: 2px dashed var(--ink); border-radius: 12px; padding: 12px 16px; background: linear-gradient(transparent, transparent); }
+.mission h3 span { background: var(--marker); color: var(--marker-ink); padding: 0 8px; border-radius: 4px; }
+.mission p { margin: 0; font-weight: 500; }
+.hintbox { margin-top: 14px; border-left: 4px solid var(--marker); background: var(--paper); padding: 10px 14px; border-radius: 0 10px 10px 0; font-size: 15px; }
+.hintbox p { margin: 0 0 8px; }
+
+/* ---------- workbench ---------- */
+.bench { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.editor { background: var(--code-bg); border-radius: 16px; overflow: hidden; border: 2px solid var(--ink); }
+.edhead { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--code-line); color: var(--code-muted); font-size: 13px; font-family: var(--font-code); }
+.edhead .fname { margin-right: auto; }
+.edhead button { background: transparent; border: 1px solid var(--code-line); color: var(--code-fg); border-radius: 7px; padding: 2px 10px; font-size: 13px; cursor: pointer; font-family: var(--font-body); }
+.edbody { display: grid; grid-template-columns: auto minmax(0, 1fr); max-height: 380px; overflow: auto; }
+.gutter { padding: 12px 8px 12px 12px; text-align: right; color: var(--code-muted); font-family: var(--font-code); font-size: 15px; line-height: 1.65; user-select: none; white-space: pre; font-variant-numeric: tabular-nums; }
+.gutter .bad { color: #fff; background: var(--ng); border-radius: 4px; padding: 0 3px; }
+textarea#code {
+  display: block; width: 100%; min-height: 200px; resize: none; border: 0; outline: none;
+  background: transparent; color: var(--code-fg); caret-color: var(--marker);
+  font-family: var(--font-code); font-size: 15px; line-height: 1.65; padding: 12px 14px 12px 6px;
+  white-space: pre; overflow: hidden; tab-size: 4;
+}
+textarea#code:focus-visible { outline: none; }
+.keys { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--code-line); overflow-x: auto; }
+.keys button { flex: none; min-width: 38px; height: 34px; background: var(--code-line); color: var(--code-fg); border: 0; border-radius: 7px; font-family: var(--font-code); font-size: 15px; cursor: pointer; padding: 0 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.actions .kbd { font-size: 12px; color: var(--ink-soft); margin-left: auto; }
+
+.world { background: var(--card); border: 2px solid var(--ink); border-radius: 16px; padding: 12px; }
+.world .wlabel { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--ink-soft); margin-bottom: 8px; flex-wrap: wrap; }
+.world canvas { display: block; width: 100%; max-width: min(100%, calc(320px * var(--ar, 2))); height: auto; margin: 0 auto; border-radius: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-soft); margin-top: 8px; }
+.legend code { font-family: var(--font-code); color: var(--ink); }
+
+.console { background: var(--card); border: 2px solid var(--ink); border-radius: 16px; overflow: hidden; }
+.console .chead { font-size: 13px; font-weight: 700; padding: 8px 14px; border-bottom: 1px solid var(--line); color: var(--ink-soft); letter-spacing: .06em; }
+.console pre { margin: 0; padding: 12px 14px; min-height: 72px; max-height: 260px; overflow: auto; font-family: var(--font-code); font-size: 15px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.console pre .muted { color: var(--ink-soft); }
+.console pre .case { color: var(--blue); font-weight: 600; }
+
+.result { border-radius: 14px; padding: 14px 16px; border: 2px solid; display: grid; gap: 8px; }
+.result.ok { background: var(--ok-soft); border-color: var(--ok); }
+.result.ng { background: var(--ng-soft); border-color: var(--ng); }
+.result h4 { margin: 0; font-size: 18px; font-family: var(--font-display); font-weight: 400; }
+.result.ok h4 { color: var(--ok); } .result.ng h4 { color: var(--ng); }
+.result p { margin: 0; }
+.result .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.loading { font-size: 14px; color: var(--ink-soft); }
+
+/* ---------- finish ---------- */
+.finish { text-align: left; }
+.finish ol { padding-left: 1.3em; margin: 0 0 10px; }
+.finish li { margin-bottom: 6px; }
+
+.pop { animation: pop .5s ease-out; }
+@keyframes pop { 0% { transform: scale(.96); } 60% { transform: scale(1.02); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } .bar i { transition: none; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 56 56" aria-hidden="true"><use href="#pai"></use></svg>
+      <div>
+        <h1><span>パイソン島の冒険</span></h1>
+        <div class="sub">ゼロから Python が書けるようになるゲーム</div>
+      </div>
+    </div>
+    <div class="progress"><div class="bar"><i id="bar"></i></div><span id="ptext">0 / 15 クリア</span></div>
+  </div>
+</header>
+<nav class="stagemap" aria-label="ステージ一覧"><div class="wrap" id="stagemap"></div></nav>
+
+<main>
+  <div class="wrap layout">
+    <section class="lesson" id="lesson" aria-live="polite"></section>
+    <section class="bench">
+      <div class="editor">
+        <div class="edhead"><span class="fname">main.py</span><button id="resetBtn" type="button">最初のコードにもどす</button></div>
+        <div class="edbody" id="edbody">
+          <div class="gutter" id="gutter">1</div>
+          <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Python のコードを書く場所"></textarea>
+        </div>
+        <div class="keys" id="keys" aria-label="記号を入力">
+          <button type="button" data-k="    " aria-label="字下げ（スペース4つ）">⇥</button>
+          <button type="button" data-k="()">( )</button>
+          <button type="button" data-k='""'>" "</button>
+          <button type="button" data-k=":">:</button>
+          <button type="button" data-k=" = "> = </button>
+          <button type="button" data-k="[]">[ ]</button>
+          <button type="button" data-k="{}">{ }</button>
+          <button type="button" data-k=", ">,</button>
+          <button type="button" data-k="print()">print()</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn run" id="runBtn" type="button" disabled>▶ 実行する</button>
+        <button class="btn" id="hintBtn" type="button">ヒント</button>
+        <span class="kbd">Ctrl + Enter でも実行できるよ</span>
+      </div>
+      <div class="world" id="world" hidden>
+        <div class="wlabel"><span id="wtitle">ロボのマップ</span><span id="wstat"></span></div>
+        <canvas id="cv" width="600" height="300"></canvas>
+        <div class="legend">
+          <span><code>right()</code> 右へ</span><span><code>left()</code> 左へ</span><span><code>up()</code> 上へ</span><span><code>down()</code> 下へ</span><span><code>at_goal()</code> ゴールにいる？</span>
+        </div>
+      </div>
+      <div class="console">
+        <div class="chead">実行結果</div>
+        <pre id="out"><span class="muted" id="loadmsg">Python を準備しているよ…</span></pre>
+      </div>
+      <div id="result" hidden></div>
+    </section>
+  </div>
+</main>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="pai" viewBox="0 0 56 56">
+      <circle cx="28" cy="28" r="26" fill="#2B5FD9"/>
+      <path d="M10 40 C 16 30, 26 46, 34 36 S 46 30, 46 22" fill="none" stroke="#FFE14D" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="44" cy="20" r="8" fill="#FFE14D"/>
+      <circle cx="46" cy="18" r="2.2" fill="#16223B"/>
+      <path d="M51 23 l4 1.5 M51 23 l3.5 3" stroke="#CF3F37" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+<script>
+(() => {
+"use strict";
+
+/* ====================== ステージデータ ====================== */
+const CHAPTERS = ["はじめの一歩", "数と変数", "ロボを動かそう", "考えるプログラム", "ボス"];
+
+const lines = s => s.split("\n").map(x => x.trim()).filter(x => x !== "");
+
+const STAGES = [
+{
+  ch: 0, title: "コンピューターにあいさつ",
+  talk: `<p>ようこそ，パイソン島へ！ぼくはヘビのパイ．</p><p>ここでは「Python（パイソン）」という言葉で，コンピューターに命令を出す練習をするよ．まずは右の黄色いボタンを押してみて！</p>`,
+  learn: `<p><code>print()</code> は「カッコの中身を画面に出して」という命令だよ．文字は <code>"</code> と <code>"</code> ではさむのがルール．</p>
+<div class="ex">print("こんにちは")
+<span class="o">→ こんにちは</span></div>
+<p>プログラムは上から順番に1行ずつ動くよ．</p>`,
+  mission: `そのまま <b>▶ 実行する</b> を押して，「こんにちは」を表示させよう．`,
+  starter: `print("こんにちは")\n`,
+  hint: `<p>右側の黄色い「▶ 実行する」ボタンを押すだけで OK！</p>`,
+  answer: `print("こんにちは")\n`,
+  check: c => c.out.includes("こんにちは") ? null : "「こんにちは」が表示されていないみたい．",
+},
+{
+  ch: 0, title: "自己紹介をしよう",
+  talk: `<p>次は自分で書いてみよう．文字はなんでも OK．日本語も使えるよ．</p>`,
+  learn: `<p><code>print()</code> を2回書くと，2行表示されるよ．</p>
+<div class="ex">print("パイです")
+print("好きな食べ物はりんご")
+<span class="o">→ パイです
+→ 好きな食べ物はりんご</span></div>
+<p><code>#</code> から後ろは「コメント」．メモ書きなので，コンピューターは無視するよ．</p>`,
+  mission: `<code>print()</code> を使って，<b>1行目に名前</b>，<b>2行目に好きなもの</b> を表示しよう．`,
+  starter: `# 1行目：名前を表示しよう\nprint("")\n\n# 2行目：好きなものを表示しよう\n`,
+  hint: `<p><code>print("")</code> の <code>""</code> の間に名前を書こう．2行目も同じように <code>print("...")</code> を書けば OK．</p>`,
+  answer: `print("パイです")\nprint("好きなものはりんご")\n`,
+  check: c => lines(c.out).length >= 2 ? null : "2行以上表示されていないよ．print() を2回使ってみよう．",
+},
+{
+  ch: 0, title: "エラーは友だち",
+  talk: `<p>プログラムを書くと，必ずまちがえる．プロでも毎日まちがえるよ！</p><p>まちがえると「エラー」が出るけど，エラーは「ここが変だよ」と教えてくれるヒントなんだ．</p>`,
+  learn: `<p>よくあるまちがい：</p>
+<ul><li><code>"</code> を閉じわすれる</li><li>カッコ <code>( )</code> を閉じわすれる</li><li>全角の <code>（ ）</code> や <code>＂</code> を使ってしまう（半角にしよう）</li></ul>
+<p>エラーが出たら，表示された<b>行番号</b>を見てその行をよく確認しよう．</p>`,
+  mission: `まずは実行してエラーを見てみよう．それから，まちがいを直して「やあ！」を表示させよう．`,
+  starter: `print("やあ！)\n`,
+  hint: `<p>文字は <code>"</code> で始めたら <code>"</code> で閉じる．「やあ！」の後ろに <code>"</code> が足りないね．</p>`,
+  answer: `print("やあ！")\n`,
+  check: c => c.out.includes("やあ") ? null : "「やあ！」が表示されていないよ．",
+},
+{
+  ch: 1, title: "計算させてみよう",
+  talk: `<p>コンピューターは計算が大得意．電卓よりずっと速いよ．</p>`,
+  learn: `<p>数は <code>"</code> で囲まずにそのまま書くよ．</p>
+<div class="ex">print(3 + 5)     <span class="c"># たし算</span>
+print(10 - 4)    <span class="c"># ひき算</span>
+print(6 * 7)     <span class="c"># かけ算は *</span>
+print(20 / 4)    <span class="c"># わり算は /</span>
+<span class="o">→ 8
+→ 6
+→ 42
+→ 5.0</span></div>`,
+  mission: `1日は何秒？「60秒 × 60分 × 24時間」を Python に計算させて表示しよう．（答えの数字を直接書くのはナシ！）`,
+  starter: `# 1分は60秒，1時間は60分，1日は24時間\nprint()\n`,
+  hint: `<p>かけ算は <code>*</code> だよ．<code>print(60 * 60 * 24)</code> のように書けるよ．</p>`,
+  answer: `print(60 * 60 * 24)\n`,
+  check: c => {
+    if (/86400/.test(c.code)) return "答えの数字を直接書いちゃダメ！計算式を書こう．";
+    return c.out.includes("86400") ? null : "答えがちがうみたい．60 × 60 × 24 を計算しよう．";
+  },
+},
+{
+  ch: 1, title: "文字と数はちがう",
+  talk: `<p>ここは引っかかりやすいポイント！<code>"100"</code> と <code>100</code> は，見た目はにているけど別物なんだ．</p>`,
+  learn: `<div class="ex">print("3" + "5")   <span class="c"># 文字どうしをつなげる</span>
+print(3 + 5)       <span class="c"># 数どうしをたす</span>
+<span class="o">→ 35
+→ 8</span></div>
+<p><code>"</code> で囲むと「文字」，囲まないと「数」になるよ．文字と数をそのまま <code>+</code> するとエラーになる．</p>
+<p>文字を数にしたいときは <code>int()</code> を使うよ．<code>int("100")</code> → <code>100</code></p>`,
+  mission: `このコードはエラーになる．<b>100 + 50 = 150</b> が表示されるように直そう．`,
+  starter: `print("100" + 50)\n`,
+  hint: `<p>やり方は2つ．<code>"100"</code> の <code>"</code> を消すか，<code>int("100")</code> にして数に変えよう．</p>`,
+  answer: `print(int("100") + 50)\n`,
+  check: c => c.out.includes("150") ? null : "150 が表示されていないよ．",
+},
+{
+  ch: 1, title: "変数は名前つきの箱",
+  talk: `<p>ゲームの HP みたいに，あとで変わる数を覚えておきたいときは「変数」を使うよ．</p>`,
+  learn: `<p><code>=</code> は「等しい」ではなく，<b>「右のものを左の箱に入れる」</b>という意味．</p>
+<div class="ex">hp = 100        <span class="c"># hp という箱に 100 を入れる</span>
+hp = hp - 30    <span class="c"># 今の hp から 30 引いて，また hp に入れる</span>
+print(hp)
+<span class="o">→ 70</span></div>
+<p>箱の名前は自分で決められるよ（英語の小文字がおすすめ）．</p>`,
+  mission: `勇者は 30 ダメージを<b>2回</b>受けた．もう1行足して，残りの HP（40）を表示しよう．`,
+  starter: `hp = 100\n\n# 30ダメージを受けた（1回目）\nhp = hp - 30\n\n# 2回目のダメージをここに書こう\n\nprint(hp)\n`,
+  hint: `<p>1回目と同じ <code>hp = hp - 30</code> をもう1行書けば OK．<code>print(hp)</code> より上に書いてね．</p>`,
+  answer: `hp = 100\nhp = hp - 30\nhp = hp - 30\nprint(hp)\n`,
+  check: c => {
+    const l = lines(c.out);
+    return l[l.length - 1] === "40" ? null : `表示されたのは「${l[l.length - 1] ?? "なし"}」．40 になるようにしよう．`;
+  },
+},
+{
+  ch: 1, title: "変数を文の中にうめこむ",
+  talk: `<p>「パイはレベル5」みたいに，文の中に変数を入れたいときに便利な書き方があるよ．</p>`,
+  learn: `<p><code>"</code> の前に <code>f</code> をつけると，<code>{ }</code> の中に変数を書けるようになるよ．</p>
+<div class="ex">name = "パイ"
+level = 5
+print(f"{name}はレベル{level}")
+<span class="o">→ パイはレベル5</span></div>`,
+  mission: `パイがレベルアップした！ <code>level</code> を1増やしてから，f をつけた文で「パイはレベル6」と表示しよう．`,
+  starter: `name = "パイ"\nlevel = 5\n\n# level を 1 増やそう\n\nprint("レベルアップ！")\nprint(f"")\n`,
+  hint: `<p>1増やすのは <code>level = level + 1</code>．表示は <code>print(f"{name}はレベル{level}")</code> だよ．</p>`,
+  answer: `name = "パイ"\nlevel = 5\nlevel = level + 1\nprint("レベルアップ！")\nprint(f"{name}はレベル{level}")\n`,
+  check: c => {
+    if (!/f["']/.test(c.code)) return "f\"...\" の書き方を使ってみよう．";
+    if (/レベル6/.test(c.code)) return "6 を直接書かずに，変数 level を使おう．";
+    return c.out.includes("レベル6") ? null : "「レベル6」が表示されていないよ．";
+  },
+},
+{
+  ch: 2, title: "ロボ，出動！",
+  talk: `<p>ここからはロボットを動かすよ．ロボは命令を1つ受けるごとに1マス動くんだ．</p><p>宝石 ◆ を拾って，旗 🏁 のゴールまで連れていこう．</p>`,
+  learn: `<p>使える命令：</p>
+<div class="ex">right()   <span class="c"># 右へ1マス</span>
+left()    <span class="c"># 左へ1マス</span>
+up()      <span class="c"># 上へ1マス</span>
+down()    <span class="c"># 下へ1マス</span></div>
+<p>カッコ <code>()</code> を忘れると動かないので注意．壁にぶつかるとエラーになるよ．</p>`,
+  mission: `宝石を拾ってゴールへ行こう．（ヒント：右に5マス，下に2マス）`,
+  starter: `right()\n`,
+  hint: `<p><code>right()</code> を5行，そのあと <code>down()</code> を2行書こう．</p>`,
+  answer: `right()\nright()\nright()\nright()\nright()\ndown()\ndown()\n`,
+  maps: [["########", "#S..*..#", "######.#", "######G#", "########"]],
+  check: c => robotCheck(c),
+},
+{
+  ch: 2, title: "くり返しの魔法 for",
+  talk: `<p>同じ命令を8回も書くのは大変…．そんなときは「くり返し」を使おう！</p>`,
+  learn: `<p><code>for</code> を使うと，同じことを何回もやらせられるよ．</p>
+<div class="ex">for i in range(3):
+    print("やっほー")
+<span class="o">→ やっほー
+→ やっほー
+→ やっほー</span></div>
+<ul><li><code>range(3)</code> は「3回」という意味</li><li>行の最後の <code>:</code> を忘れずに</li><li>くり返したい行は<b>スペース4つ下げる</b>（字下げ）．⇥ ボタンでも入れられるよ</li></ul>`,
+  mission: `<code>for</code> を使って，ロボを右に8マス進めよう．`,
+  starter: `for i in range(1):\n    right()\n`,
+  hint: `<p><code>range(1)</code> の数字を変えるだけ！右へ8マスなので…？</p>`,
+  answer: `for i in range(8):\n    right()\n`,
+  maps: [["###########", "#S*.*.*.*G#", "###########"]],
+  check: c => {
+    if (!/\bfor\b/.test(c.code)) return "for を使ってみよう．";
+    return robotCheck(c);
+  },
+},
+{
+  ch: 2, title: "数をかぞえる for",
+  talk: `<p>実は <code>for i in ...</code> の <code>i</code> には，回数の数字が入っているんだ．</p>`,
+  learn: `<p><code>range(1, 6)</code> は「1 から 5 まで」．最後の数（6）は<b>入らない</b>のがポイント．</p>
+<div class="ex">for i in range(1, 6):
+    print(i)
+<span class="o">→ 1
+→ 2
+→ 3
+→ 4
+→ 5</span></div>
+<p>くり返しの中では計算もできるよ．<code>print(i * 2)</code> なら 2, 4, 6, …</p>`,
+  mission: `九九の<b>7の段</b>（7, 14, 21, …, 70）を for を使って10行表示しよう．`,
+  starter: `for i in range(1, 6):\n    print(i)\n`,
+  hint: `<p>1 から 10 まで回すには <code>range(1, 11)</code>．表示するのは <code>i * 7</code> だね．</p>`,
+  answer: `for i in range(1, 11):\n    print(i * 7)\n`,
+  check: c => {
+    if (!/\bfor\b/.test(c.code)) return "for を使ってみよう．";
+    const want = Array.from({ length: 10 }, (_, k) => String((k + 1) * 7));
+    const got = lines(c.out);
+    if (got.join(",") === want.join(",")) return null;
+    return `表示されたのは「${got.slice(0, 10).join(", ") || "なし"}」．7, 14, 21, … 70 になるようにしよう．`;
+  },
+},
+{
+  ch: 3, title: "もしも… if",
+  talk: `<p>プログラムは「もし〇〇なら△△する」という判断もできるよ．</p><p>このステージの <code>score</code> には，テストの点数が<b>毎回ちがう数で</b>入っているよ．どんな点数でも正しく動くようにしよう！</p>`,
+  learn: `<div class="ex">if score >= 60:
+    print("合格")
+else:
+    print("不合格")</div>
+<ul><li><code>if</code> の条件が正しければ，その下の字下げした行が動く</li><li>正しくなければ <code>else:</code> の下が動く</li><li>比べる記号：<code>&gt;=</code>（以上） <code>&lt;</code>（未満） <code>==</code>（同じ） <code>!=</code>（ちがう）</li></ul>
+<p>同じかどうか比べるのは <code>=</code> ではなく <code>==</code>．<code>=</code> は箱に入れる記号だったね．</p>`,
+  mission: `60点以上なら「合格」，それ以外なら「不合格」と表示しよう．（85点，40点，60点の3回テストするよ）`,
+  starter: `print("点数:", score)\n\nif score >= 60:\n    print("合格")\n\n# 60点未満のときのことを書こう\n`,
+  hint: `<p><code>else:</code> を <code>if</code> と同じ位置（字下げなし）に書いて，その下に字下げして <code>print("不合格")</code> を書こう．</p>`,
+  answer: `print("点数:", score)\n\nif score >= 60:\n    print("合格")\nelse:\n    print("不合格")\n`,
+  cases: [85, 40, 60],
+  check: c => {
+    for (let k = 0; k < c.runs.length; k++) {
+      const s = c.runs[k].score, o = c.runs[k].out;
+      const pass = s >= 60;
+      if (pass && (!o.includes("合格") || o.includes("不合格"))) return `${s}点のとき「合格」だけが表示されるようにしよう．`;
+      if (!pass && !o.includes("不合格")) return `${s}点のとき「不合格」が表示されていないよ．`;
+    }
+    return null;
+  },
+},
+{
+  ch: 3, title: "ゴールまで進め while",
+  talk: `<p>今度のマップは，<b>道の長さが毎回ちがう</b>んだ．何マス進めばいいか分からない…どうしよう？</p>`,
+  learn: `<p><code>while</code> は「条件が正しいあいだ，ずっとくり返す」命令だよ．</p>
+<div class="ex">while not at_goal():
+    right()</div>
+<ul><li><code>at_goal()</code> はゴールにいれば <code>True</code>（はい），いなければ <code>False</code>（いいえ）を返す</li><li><code>not</code> は反対にする言葉．「ゴールにいないあいだ」という意味になる</li></ul>
+<p>終わらないくり返し（無限ループ）に注意．止まらなかったら自動でストップするよ．</p>`,
+  mission: `<code>while</code> と <code>at_goal()</code> を使って，長さのちがう2つのマップの両方でゴールしよう．`,
+  starter: `right()\nright()\nright()\nright()\n`,
+  hint: `<p>right() を並べるのをやめて，<code>while not at_goal():</code> の下に字下げして <code>right()</code> を1つだけ書こう．</p>`,
+  answer: `while not at_goal():\n    right()\n`,
+  maps: [["#######", "#S...G#", "#######"], ["##############", "#S..........G#", "##############"]],
+  check: c => {
+    if (!/\bwhile\b/.test(c.code)) return "while を使ってみよう．";
+    return robotCheck(c);
+  },
+},
+{
+  ch: 3, title: "持ち物リスト",
+  talk: `<p>たくさんのデータをまとめて入れておける「リスト」を紹介するよ．冒険の持ち物みたいなものだね．</p>`,
+  learn: `<div class="ex">items = ["りんご", "ポーション", "かぎ"]
+print(items[0])     <span class="c"># 0番目（最初）</span>
+print(len(items))   <span class="c"># 何こあるか</span>
+<span class="o">→ りんご
+→ 3</span></div>
+<p>番号は <b>0 から</b> 数えるのがルール．<code>for</code> と組み合わせると，中身を1つずつ取り出せるよ．</p>
+<div class="ex">for item in items:
+    print(item)</div>`,
+  mission: `<code>for</code> で持ち物を全部1行ずつ表示して，最後に <code>len()</code> で持ち物の数を表示しよう．`,
+  starter: `items = ["りんご", "ポーション", "かぎ"]\n\nprint(items[0])\n`,
+  hint: `<p><code>for item in items:</code> の下に <code>print(item)</code>．そのあと字下げなしで <code>print(len(items))</code> を書こう．</p>`,
+  answer: `items = ["りんご", "ポーション", "かぎ"]\n\nfor item in items:\n    print(item)\n\nprint(len(items))\n`,
+  check: c => {
+    if (!/\bfor\b/.test(c.code)) return "for を使ってみよう．";
+    if (!/len\s*\(/.test(c.code)) return "len() を使って数を表示しよう．";
+    const l = lines(c.out);
+    for (const w of ["りんご", "ポーション", "かぎ"]) if (!l.some(x => x.includes(w))) return `「${w}」が表示されていないよ．`;
+    return l.some(x => /\b3\b/.test(x)) ? null : "持ち物の数（3）が表示されていないよ．";
+  },
+},
+{
+  ch: 3, title: "自分だけの命令 def",
+  talk: `<p><code>print()</code> や <code>right()</code> みたいな命令（関数）は，自分で作ることもできるんだ！</p>`,
+  learn: `<div class="ex">def add(a, b):
+    return a + b
+
+print(add(2, 3))
+<span class="o">→ 5</span></div>
+<ul><li><code>def 名前(材料):</code> で関数を作る</li><li>中身は字下げして書く</li><li><code>return</code> は「この答えを返す」という意味</li></ul>`,
+  mission: `数を<b>2倍にして返す</b>関数 <code>double(n)</code> を完成させよう．（いくつかの数でテストするよ）`,
+  starter: `def double(n):\n    return 0   # ここを直そう\n\nprint(double(5))\n`,
+  hint: `<p>2倍は <code>n * 2</code>．<code>return 0</code> を <code>return n * 2</code> にしよう．</p>`,
+  answer: `def double(n):\n    return n * 2\n\nprint(double(5))\n`,
+  test: `\nprint("@@TEST@@", double(3), double(10), double(-4))\n`,
+  check: c => {
+    if (!/\bdef\s+double\b/.test(c.code)) return "def double(n): を消さないでね．";
+    const m = c.testOut.match(/@@TEST@@ (.*)/);
+    if (!m) return "テストを実行できなかったよ．";
+    const got = m[1].trim().split(/\s+/);
+    const want = ["6", "20", "-8"];
+    const tries = ["3", "10", "-4"];
+    for (let k = 0; k < 3; k++) if (got[k] !== want[k]) return `double(${tries[k]}) が ${got[k]} になったよ．${want[k]} になるはず．`;
+    return null;
+  },
+},
+{
+  ch: 4, title: "ボス：大階段をおりろ",
+  talk: `<p>最後の試練！長い階段をおりて，宝石を3つ全部拾ってゴールしよう．</p><p>今まで覚えた <code>def</code> と <code>for</code> を組み合わせれば，短く書けるはず．</p>`,
+  learn: `<p>階段の1段は「右に1，下に1」．これを関数にまとめると…</p>
+<div class="ex">def step():
+    right()
+    down()</div>
+<p>あとは <code>step()</code> を何回くり返せばいいか考えよう．マップのマスを数えてみてね．</p>`,
+  mission: `<code>def</code> で1段分の関数を作り，<code>for</code> でくり返して，宝石3つを拾ってゴールしよう．`,
+  starter: `def step():\n    right()\n    down()\n\n# ここで step() をくり返そう\n`,
+  hint: `<p>階段は6段あるよ．<code>for i in range(6):</code> の下に字下げして <code>step()</code> を書こう．</p>`,
+  answer: `def step():\n    right()\n    down()\n\nfor i in range(6):\n    step()\n`,
+  maps: [["#########", "#S.######", "##*.#####", "###..####", "####*.###", "#####..##", "######*.#", "#######G#", "#########"]],
+  check: c => {
+    if (!/\bdef\b/.test(c.code)) return "def で関数を作ってみよう．";
+    if (!/\bfor\b/.test(c.code)) return "for でくり返してみよう．";
+    return robotCheck(c);
+  },
+},
+];
+
+const FREE = {
+  ch: -1, title: "じゆう帳", free: true,
+  talk: `<p>全ステージクリア，おめでとう！君はもう Python が書ける人だ．</p><p>ここは「じゆう帳」．好きなプログラムを書いて試してみよう．</p>`,
+  learn: ``,
+  mission: ``,
+  starter: `import random\n\n# サイコロを5回ふってみよう\nfor i in range(5):\n    dice = random.randint(1, 6)\n    print(f"{i + 1}回目: {dice}")\n`,
+};
+
+/* ====================== 状態 ====================== */
+const KEY = "python-island-v1";
+let save = { cleared: [], codes: {}, cur: 0 };
+try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && Array.isArray(s.cleared)) save = Object.assign(save, s); } catch (e) {}
+const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} };
+
+const $ = id => document.getElementById(id);
+const codeEl = $("code"), gutterEl = $("gutter"), outEl = $("out"), resultEl = $("result");
+let cur = Math.min(save.cur || 0, STAGES.length);
+let hintLevel = 0;
+let ready = false;
+let animToken = 0;
+
+const stageOf = i => i >= STAGES.length ? FREE : STAGES[i];
+const unlocked = i => i === 0 || save.cleared.includes(i - 1) || save.cleared.includes(i) || (i === STAGES.length && save.cleared.length >= STAGES.length);
+
+/* ====================== 描画 ====================== */
+function renderMap() {
+  const m = $("stagemap"); m.innerHTML = "";
+  CHAPTERS.forEach((name, ci) => {
+    const g = document.createElement("div"); g.className = "chap";
+    g.innerHTML = `<b>${ci + 1}. ${name}</b>`;
+    STAGES.forEach((s, i) => {
+      if (s.ch !== ci) return;
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = i + 1;
+      b.className = "dot" + (save.cleared.includes(i) ? " done" : "") + (i === cur ? " now" : "") + (unlocked(i) ? "" : " locked");
+      b.setAttribute("aria-label", `ステージ${i + 1} ${s.title}${save.cleared.includes(i) ? "（クリア）" : ""}`);
+      b.onclick = () => { if (unlocked(i)) go(i); };
+      g.appendChild(b);
+    });
+    m.appendChild(g);
+  });
+  if (save.cleared.length >= STAGES.length) {
+    const g = document.createElement("div"); g.className = "chap";
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn ghost"; b.textContent = "じゆう帳";
+    b.onclick = () => go(STAGES.length);
+    g.appendChild(b); m.appendChild(g);
+  }
+  const n = save.cleared.length;
+  $("bar").style.width = (n / STAGES.length * 100) + "%";
+  $("ptext").textContent = `${n} / ${STAGES.length} クリア`;
+}
+
+function renderLesson() {
+  const s = stageOf(cur);
+  const eyebrow = s.free ? "おまけ" : `ステージ ${cur + 1} ・ ${CHAPTERS[s.ch]}`;
+  let h = `<div class="eyebrow">${eyebrow}</div><h2>${s.title}</h2>
+  <div class="talk"><svg viewBox="0 0 56 56" aria-hidden="true"><use href="#pai"></use></svg><div class="bubble">${s.talk}</div></div>`;
+  if (s.learn) h += `<div class="learn"><h3>📘 おぼえること</h3>${s.learn}</div>`;
+  if (s.mission) h += `<div class="mission"><h3><span>ミッション</span></h3><p>${s.mission}</p></div>`;
+  if (s.free) h += `<div class="learn finish"><h3>次のステップ</h3><ol>
+    <li>自分のパソコンで Python を使うには，<a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> からインストールしよう．</li>
+    <li>インストールなしで試すなら，ブラウザで動く Google Colab も便利．</li>
+    <li>次に学ぶと楽しいこと：<code>input()</code> で入力を受け取る，辞書 <code>{}</code>，<code>import</code> で道具を借りる．</li></ol>
+    <p>ここまでのステージは上の番号からいつでも復習できるよ．</p></div>`;
+  h += `<div id="hintArea"></div>`;
+  $("lesson").innerHTML = h;
+  $("hintBtn").hidden = !!s.free;
+}
+
+function go(i) {
+  cur = i; save.cur = i; persist();
+  hintLevel = 0; animToken++;
+  const s = stageOf(i);
+  codeEl.value = save.codes[i] ?? s.starter;
+  syncGutter();
+  renderMap(); renderLesson();
+  resultEl.hidden = true; resultEl.innerHTML = "";
+  outEl.innerHTML = ready ? `<span class="muted">▶ 実行するとここに結果が出るよ．</span>` : `<span class="muted">Python を準備しているよ…</span>`;
+  setupWorld(s);
+  window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+}
+
+function showHint() {
+  const s = stageOf(cur); if (s.free) return;
+  hintLevel = Math.min(hintLevel + 1, 2);
+  let h = `<div class="hintbox"><p><b>ヒント</b></p>${s.hint}`;
+  if (hintLevel >= 2) h += `<p>それでも分からなければ，答えのコードを入れて動きを見てみよう．</p><button class="btn ghost" id="ansBtn" type="button">答えのコードを入れる</button>`;
+  h += `</div>`;
+  $("hintArea").innerHTML = h;
+  $("hintBtn").textContent = hintLevel >= 2 ? "ヒント" : "もっとヒント";
+  const a = $("ansBtn");
+  if (a) a.onclick = () => { codeEl.value = s.answer; onCodeChange(); codeEl.focus(); };
+}
+
+/* ====================== エディタ ====================== */
+function syncGutter(badLine) {
+  const n = codeEl.value.split("\n").length;
+  let g = "";
+  for (let k = 1; k <= n; k++) g += (k === badLine ? `<span class="bad">${k}</span>` : k) + (k < n ? "\n" : "");
+  gutterEl.innerHTML = g;
+  codeEl.style.height = "auto";
+  codeEl.style.height = codeEl.scrollHeight + "px";
+}
+function onCodeChange() { save.codes[cur] = codeEl.value; persist(); syncGutter(); }
+codeEl.addEventListener("input", onCodeChange);
+
+function insertAt(text, caretBack = 0) {
+  const a = codeEl.selectionStart, b = codeEl.selectionEnd;
+  codeEl.setRangeText(text, a, b, "end");
+  const p = codeEl.selectionStart - caretBack;
+  codeEl.setSelectionRange(p, p);
+  onCodeChange();
+}
+codeEl.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); run(); return; }
+  if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); insertAt("    "); return; }
+  if (e.key === "Enter" && !e.isComposing) {
+    const v = codeEl.value, a = codeEl.selectionStart;
+    const lineStart = v.lastIndexOf("\n", a - 1) + 1;
+    const line = v.slice(lineStart, a);
+    let ind = (line.match(/^ */) || [""])[0];
+    if (/:\s*(#.*)?$/.test(line)) ind += "    ";
+    e.preventDefault(); insertAt("\n" + ind);
+  }
+  if (e.key === "Backspace" && codeEl.selectionStart === codeEl.selectionEnd) {
+    const v = codeEl.value, a = codeEl.selectionStart;
+    const lineStart = v.lastIndexOf("\n", a - 1) + 1;
+    const before = v.slice(lineStart, a);
+    if (before.length >= 4 && /^ +$/.test(before)) {
+      e.preventDefault();
+      const cut = before.length % 4 || 4;
+      codeEl.setRangeText("", a - cut, a, "end"); onCodeChange();
+    }
+  }
+});
+$("keys").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const k = b.dataset.k;
+  const pairs = { "()": 1, '""': 1, "[]": 1, "{}": 1, "print()": 1 };
+  codeEl.focus();
+  insertAt(k, pairs[k] || 0);
+});
+$("resetBtn").onclick = () => { codeEl.value = stageOf(cur).starter; delete save.codes[cur]; persist(); syncGutter(); };
+$("hintBtn").onclick = showHint;
+$("runBtn").onclick = () => run();
+
+/* ====================== ロボの世界 ====================== */
+function parseMap(rows) {
+  const m = { w: rows[0].length, h: rows.length, walls: new Set(), gems: new Set(), sx: 0, sy: 0, gx: 0, gy: 0 };
+  rows.forEach((r, y) => [...r].forEach((ch, x) => {
+    const k = x + "," + y;
+    if (ch === "#") m.walls.add(k);
+    if (ch === "*") m.gems.add(k);
+    if (ch === "S") { m.sx = x; m.sy = y; }
+    if (ch === "G") { m.gx = x; m.gy = y; }
+  }));
+  return m;
+}
+function setupWorld(s) {
+  const w = $("world");
+  if (!s.maps) { w.hidden = true; return; }
+  w.hidden = false;
+  const m = parseMap(s.maps[0]);
+  $("wtitle").textContent = s.maps.length > 1 ? `マップ 1 / ${s.maps.length}` : "ロボのマップ";
+  $("wstat").textContent = `宝石 0 / ${m.gems.size}`;
+  drawWorld(m, { x: m.sx, y: m.sy, got: new Set(), dir: "right" });
+}
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function drawWorld(m, st, bump) {
+  const cv = $("cv");
+  const cell = Math.floor(Math.min(64, 620 / m.w));
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = m.w * cell * dpr; cv.height = m.h * cell * dpr;
+  cv.style.aspectRatio = `${m.w} / ${m.h}`;
+  cv.style.setProperty("--ar", (m.w / m.h).toFixed(3));
+  const c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const tile = css("--tile"), wall = css("--wall"), line = css("--line"), marker = css("--marker"), blue = css("--blue"), ng = css("--ng"), ok = css("--ok");
+  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+    const k = x + "," + y, px = x * cell, py = y * cell;
+    if (m.walls.has(k)) { c.fillStyle = wall; c.fillRect(px, py, cell, cell); continue; }
+    c.fillStyle = tile; c.fillRect(px, py, cell, cell);
+    c.strokeStyle = line; c.lineWidth = 1; c.strokeRect(px + .5, py + .5, cell - 1, cell - 1);
+    if (m.gems.has(k) && !st.got.has(k)) {
+      const cx = px + cell / 2, cy = py + cell / 2, r = cell * .22;
+      c.fillStyle = "#3FB6E8"; c.beginPath(); c.moveTo(cx, cy - r); c.lineTo(cx + r, cy); c.lineTo(cx, cy + r); c.lineTo(cx - r, cy); c.closePath(); c.fill();
+      c.fillStyle = "rgba(255,255,255,.6)"; c.beginPath(); c.moveTo(cx, cy - r); c.lineTo(cx + r * .45, cy - r * .1); c.lineTo(cx - r * .2, cy - r * .1); c.closePath(); c.fill();
+    }
+    if (x === m.gx && y === m.gy) {
+      const fx = px + cell * .34, fy = py + cell * .2;
+      c.strokeStyle = css("--ink"); c.lineWidth = 2.5; c.beginPath(); c.moveTo(fx, fy); c.lineTo(fx, py + cell * .82); c.stroke();
+      const sq = cell * .1;
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
+        c.fillStyle = (i + j) % 2 ? ok : "#FFFFFF";
+        c.fillRect(fx + i * sq, fy + j * sq, sq, sq);
+      }
+      c.strokeStyle = ok; c.lineWidth = 1; c.strokeRect(fx, fy, sq * 3, sq * 2);
+    }
+  }
+  // robot
+  const rx = st.x * cell + cell / 2, ry = st.y * cell + cell / 2, R = cell * .34;
+  c.fillStyle = bump ? ng : blue;
+  c.beginPath(); c.arc(rx, ry, R, 0, Math.PI * 2); c.fill();
+  c.fillStyle = marker; c.beginPath(); c.arc(rx, ry, R * .62, 0, Math.PI * 2); c.fill();
+  const d = { right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1] }[st.dir] || [1, 0];
+  const ex = rx + d[0] * R * .3, ey = ry + d[1] * R * .3;
+  const px2 = -d[1] * R * .26, py2 = d[0] * R * .26;
+  c.fillStyle = css("--marker-ink");
+  c.beginPath(); c.arc(ex + px2, ey + py2, R * .12, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(ex - px2, ey - py2, R * .12, 0, Math.PI * 2); c.fill();
+}
+
+let world = null; // 実行中のロボの状態
+function robotBuiltins(on) {
+  const names = ["right", "left", "up", "down", "at_goal"];
+  if (!on) { names.forEach(n => delete Sk.builtins[n]); return; }
+  const mv = (dir, dx, dy) => new Sk.builtin.func(function () {
+    if (arguments.length) throw new Sk.builtin.TypeError(`${dir}() のカッコの中は空にしてね（1回で1マス動くよ）`);
+    const W = world;
+    W.steps++;
+    if (W.steps > 300) throw new Sk.builtin.RuntimeError("ロボが動きすぎて疲れちゃった（300歩をこえた）");
+    const nx = W.x + dx, ny = W.y + dy, k = nx + "," + ny;
+    W.dir = dir;
+    if (nx < 0 || ny < 0 || nx >= W.m.w || ny >= W.m.h || W.m.walls.has(k)) {
+      W.frames.push({ x: W.x, y: W.y, got: new Set(W.got), dir, bump: true });
+      throw new Sk.builtin.RuntimeError("ロボが壁にぶつかった！");
+    }
+    W.x = nx; W.y = ny;
+    if (W.m.gems.has(k)) W.got.add(k);
+    W.frames.push({ x: nx, y: ny, got: new Set(W.got), dir });
+    return Sk.builtin.none.none$;
+  });
+  Sk.builtins.right = mv("right", 1, 0);
+  Sk.builtins.left = mv("left", -1, 0);
+  Sk.builtins.up = mv("up", 0, -1);
+  Sk.builtins.down = mv("down", 0, 1);
+  Sk.builtins.at_goal = new Sk.builtin.func(function () {
+    return (world.x === world.m.gx && world.y === world.m.gy) ? Sk.builtin.bool.true$ : Sk.builtin.bool.false$;
+  });
+}
+function robotCheck(c) {
+  for (let k = 0; k < c.runs.length; k++) {
+    const r = c.runs[k], W = r.world, tag = c.runs.length > 1 ? `マップ${k + 1}で，` : "";
+    if (W.got.size < W.m.gems.size) return `${tag}宝石をまだ ${W.m.gems.size - W.got.size} こ拾っていないよ．`;
+    if (!(W.x === W.m.gx && W.y === W.m.gy)) return `${tag}ロボがゴールに着いていないよ．`;
+  }
+  return null;
+}
+
+/* ====================== 実行 ====================== */
+function builtinRead(x) {
+  if (Sk.builtinFiles === undefined || Sk.builtinFiles.files[x] === undefined) throw "File not found: '" + x + "'";
+  return Sk.builtinFiles.files[x];
+}
+async function exec(code) {
+  let out = "";
+  Sk.configure({
+    output: t => { out += t; },
+    read: builtinRead,
+    __future__: Sk.python3,
+    execLimit: 4000,
+    killableWhile: true,
+    killableFor: true,
+  });
+  try {
+    await Sk.misceval.asyncToPromise(() => Sk.importMainWithBody("<stdin>", false, code, true));
+    return { out, err: null };
+  } catch (e) {
+    return { out, err: e };
+  }
+}
+
+const FULLWIDTH = /[（）＂“”：＝＋－＊／［］｛｝，　]/;
+function explain(err, code) {
+  let name = "Error", raw = String(err), line = null;
+  if (err && err.tp$name) {
+    name = err.tp$name;
+    try { raw = err.toString(); } catch (e) {}
+    if (err.traceback && err.traceback.length) line = err.traceback[0].lineno;
+  }
+  if (/TimeLimitError|exceeded run time/i.test(raw) || name === "TimeLimitError") {
+    return { line, title: "止まらないくり返し", msg: "プログラムが終わらなかったので止めたよ．くり返しが永遠に続いていないか確認しよう．" };
+  }
+  const nm = raw.match(/name '([^']+)' is not defined/);
+  const robotMsg = raw.replace(/^[A-Za-z]+Error:\s*/, "").replace(/\s+on line \d+$/, "");
+  const map = {
+    SyntaxError: "書き方のルールがちがうみたい．<code>\"</code> や <code>( )</code> が閉じているか，<code>if</code> / <code>for</code> の行の最後に <code>:</code> があるか見てみよう．",
+    IndentationError: "字下げ（行の先頭のスペース）がおかしいよ．<code>:</code> で終わる行の次は，スペース4つ下げよう．字下げしない行は先頭にスペースを入れないでね．",
+    NameError: nm ? `「${nm[1]}」という名前が見つからないよ．スペルまちがい？文字なら <code>"</code> で囲もう．変数なら先に <code>=</code> で作っておこう．` : "知らない名前が使われているよ．",
+    TypeError: /concatenate|unsupported operand|must be str/.test(raw) ? "ちがう種類のデータ（文字と数など）を組み合わせようとしているよ．文字を数にするには <code>int()</code> を使おう．" : robotMsg,
+    ZeroDivisionError: "0 でわり算はできないよ．",
+    IndexError: "リストの番号が大きすぎるよ．番号は 0 から始まるのを思い出そう．",
+    RuntimeError: robotMsg,
+    ValueError: "値がおかしいよ．たとえば <code>int(\"あ\")</code> は数に変えられないよ．",
+  };
+  let msg = map[name] || robotMsg;
+  if (name === "SyntaxError" && line) {
+    const L = code.split("\n"), prev = (L[line - 2] || "").replace(/#.*$/, "").trimEnd(), here = L[line - 1] || "";
+    if (/:$/.test(prev) && !/^\s/.test(here)) msg = `${line - 1}行目が <code>:</code> で終わっているので，${line}行目は字下げ（スペース4つ）が必要だよ．`;
+  }
+  if ((name === "SyntaxError" || name === "IndentationError" || name === "NameError") && FULLWIDTH.test(stripStrings(code))) {
+    msg += "<br>全角の記号（ （ ） ： ＝ や全角スペース）が入っていないか確認しよう．記号は半角で書くよ．";
+  }
+  return { line, title: name, msg, raw };
+}
+function stripStrings(code) { return code.replace(/"[^"\n]*"|'[^'\n]*'/g, "\"\"").replace(/#.*$/gm, ""); }
+
+function esc(s) { return s.replace(/[&<>]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch])); }
+
+async function run() {
+  if (!ready) return;
+  const s = stageOf(cur), code = codeEl.value;
+  const btn = $("runBtn"); btn.disabled = true;
+  const token = ++animToken;
+  resultEl.hidden = true;
+  syncGutter();
+  const runs = [];
+  let firstErr = null;
+
+  const nCases = s.maps ? s.maps.length : s.cases ? s.cases.length : 1;
+  for (let k = 0; k < nCases; k++) {
+    if (s.maps) { const m = parseMap(s.maps[k]); world = { m, x: m.sx, y: m.sy, got: new Set(), dir: "right", steps: 0, frames: [] }; }
+    robotBuiltins(!!s.maps);
+    if (s.cases) Sk.builtins.score = new Sk.builtin.int_(s.cases[k]); else delete Sk.builtins.score;
+    const r = await exec(code);
+    const entry = { out: r.out, err: r.err, world, score: s.cases ? s.cases[k] : null };
+    if (!r.err && s.test) { const t = await exec(code + s.test); entry.testOut = t.out; if (t.err) entry.err = t.err; }
+    runs.push(entry);
+    if (r.err || entry.err) { firstErr = entry.err; break; }
+  }
+  delete Sk.builtins.score;
+
+  // 出力表示
+  let html = "";
+  runs.forEach((r, k) => {
+    if (s.cases) html += `<span class="case">▷ score = ${r.score} のとき</span>\n`;
+    else if (s.maps && s.maps.length > 1) html += `<span class="case">▷ マップ ${k + 1}</span>\n`;
+    html += r.out ? esc(r.out) : (s.maps ? "" : `<span class="muted">（何も表示されなかったよ）</span>\n`);
+  });
+  let ex = null;
+  if (firstErr) {
+    ex = explain(firstErr, code);
+    html += `<span style="color:var(--ng)">${esc(String(ex.raw || ex.title))}</span>`;
+    if (ex.line) syncGutter(ex.line);
+  }
+  outEl.innerHTML = html.trim() ? html : `<span class="muted">（何も表示されなかったよ）</span>`;
+
+  // ロボのアニメ
+  if (s.maps) {
+    for (let k = 0; k < runs.length; k++) {
+      if (token !== animToken) return;
+      await animate(runs[k].world, k, s.maps.length, token);
+    }
+  }
+  if (token !== animToken) return;
+  btn.disabled = false;
+
+  // 判定
+  if (firstErr) {
+    showResult(false, ex.line ? `${ex.line}行目でエラー` : "エラーが出たよ", `<p>${ex.msg}</p>`);
+    return;
+  }
+  if (s.free) return;
+  const ctx = { out: runs[0].out, code, runs, testOut: runs[0].testOut || "" };
+  const why = s.check(ctx);
+  if (why) { showResult(false, "おしい！", `<p>${why}</p>`); return; }
+  const first = !save.cleared.includes(cur);
+  if (first) save.cleared.push(cur);
+  persist(); renderMap();
+  const last = cur === STAGES.length - 1;
+  const msg = PRAISE[cur % PRAISE.length];
+  showResult(true, last ? "全ステージクリア！" : "クリア！", `<p>${last ? "大階段を制覇した！君はもう立派な Python 使いだ．" : msg}</p>`, last ? "じゆう帳へ" : "次のステージへ ▶");
+}
+const PRAISE = ["その調子！", "いいね，ちゃんと動いた！", "完ぺき！", "プログラマーっぽくなってきた！", "すごい，一発で書けたかな？", "どんどんいこう！"];
+
+function animate(W, k, total, token) {
+  return new Promise(res => {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const delay = reduce ? 60 : Math.max(70, Math.min(220, 2600 / Math.max(1, W.frames.length)));
+    $("wtitle").textContent = total > 1 ? `マップ ${k + 1} / ${total}` : "ロボのマップ";
+    let i = -1;
+    const start = { x: W.m.sx, y: W.m.sy, got: new Set(), dir: "right" };
+    const tick = () => {
+      if (token !== animToken) return res();
+      const f = i < 0 ? start : W.frames[i];
+      drawWorld(W.m, f, f.bump);
+      $("wstat").textContent = `宝石 ${f.got.size} / ${W.m.gems.size}`;
+      i++;
+      if (i >= W.frames.length) return setTimeout(res, total > 1 ? 450 : 0);
+      setTimeout(tick, delay);
+    };
+    tick();
+  });
+}
+
+function showResult(ok, title, body, nextLabel) {
+  resultEl.className = "result pop " + (ok ? "ok" : "ng");
+  let h = `<h4>${ok ? "★ " : ""}${title}</h4>${body}`;
+  if (ok) h += `<div class="row"><button class="btn run" id="nextBtn" type="button">${nextLabel}</button></div>`;
+  else if (hintLevel === 0) h += `<p style="font-size:14px">こまったら「ヒント」ボタンを押してね．</p>`;
+  resultEl.innerHTML = h;
+  resultEl.hidden = false;
+  const n = $("nextBtn");
+  if (n) n.onclick = () => go(cur + 1);
+  resultEl.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
+
+/* ====================== 起動 ====================== */
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => setupWorld(stageOf(cur)));
+new MutationObserver(() => setupWorld(stageOf(cur))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+go(cur);
+function boot() {
+  if (typeof Sk === "undefined") {
+    outEl.innerHTML = `<span style="color:var(--ng)">Python の読み込みに失敗したよ．ページを再読み込みしてみてね．</span>`;
+    return;
+  }
+  ready = true;
+  $("runBtn").disabled = false;
+  outEl.innerHTML = `<span class="muted">▶ 実行するとここに結果が出るよ．</span>`;
+}
+if (document.readyState === "complete") boot(); else window.addEventListener("load", boot);
+})();
+</script>
