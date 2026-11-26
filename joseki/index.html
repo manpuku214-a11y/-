@@ -153,22 +153,63 @@ p { margin: 0; line-height: 1.8; }
 .done { text-align: center; gap: 12px; }
 .done .stars { font-size: 30px; }
 @media (prefers-reduced-motion: reduce) { .sq.hint::after, .sq.wrong { animation: none; } .progress span { transition: none; } }
+/* 追加：タブ，手筋の一覧，持ち駒，成りの選択 */
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); }
+.tab {
+  font: 700 15px var(--ui); color: var(--muted); background: transparent; border: 0;
+  border-bottom: 3px solid transparent; padding: 8px 14px 10px; cursor: pointer; margin-bottom: -1px;
+}
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab .count { font-size: 12px; font-weight: 400; margin-left: 4px; }
+.tab:focus-visible, .tsj:focus-visible, .hp:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.section { display: flex; flex-direction: column; gap: 10px; }
+.section h3 { font-size: 13px; letter-spacing: 0.12em; color: var(--muted); margin: 6px 0 0; font-weight: 700; }
+.tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tsj {
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.tsj:hover { border-color: var(--ink); }
+.tsj .tn { font-family: var(--sign); font-weight: 800; font-size: 16px; }
+.tsj .tm { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.tsj .stars { font-size: 12px; letter-spacing: 1px; }
+.summary { font-size: 13px; color: var(--muted); }
+.hp {
+  font: 800 18px var(--sign); color: #1f1c16; background: var(--piece);
+  border: 1px solid var(--piece-edge); border-radius: 3px; padding: 2px 8px; cursor: pointer;
+  display: inline-flex; align-items: baseline; gap: 2px;
+}
+.hp small { font: 700 11px var(--ui); }
+.hp[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 1px; }
+.hp.hint { animation: blink 1s steps(2) infinite; }
+.hp:disabled { cursor: default; }
+.question { font-size: 14px; line-height: 1.8; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--bg); }
+.promo-choice { display: flex; gap: 8px; }
+.tagline { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.tagline span { border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+@media (prefers-reduced-motion: reduce) { .hp.hint { animation: none; } }
 </style>
 
 <div class="wrap" id="home">
   <div style="display:flex;flex-direction:column;gap:10px">
-    <span class="eyebrow">将棋 序盤の手順を指で覚える</span>
+    <span class="eyebrow">将棋 序盤と手筋を指で覚える</span>
     <h1>定跡なぞり</h1>
-    <p class="lead">代表的な定跡の出だしを，実際に駒を動かしながら覚えます．相手の手は自動で指されるので，あなたは自分の側の正しい一手を選んでください．間違えずに最後まで指せれば星三つです．</p>
+    <p class="lead">定跡は相手の手が自動で指されるので，自分の側の正しい一手を指します．手筋は問題の局面で，その手筋を使った一手を指します．間違えずに指せれば星三つです．</p>
   </div>
-  <div class="list" id="list"></div>
-  <p class="lead" style="font-size:13px">操作：動かしたい駒をタップしてから，行き先のマスをタップ．同じ手を二回間違えると，動かす駒の場所が点滅します．</p>
+  <div class="tabs" role="tablist">
+    <button class="tab" id="tabJ" role="tab" type="button" aria-selected="true">定跡<span class="count" id="countJ"></span></button>
+    <button class="tab" id="tabT" role="tab" type="button" aria-selected="false">手筋<span class="count" id="countT"></span></button>
+  </div>
+  <div id="paneJ" class="section"></div>
+  <div id="paneT" class="section" hidden></div>
+  <p class="lead" style="font-size:13px">操作：動かしたい駒（持ち駒も）をタップしてから，行き先のマスをタップ．成れる時は「成る」「成らない」を選びます．同じ手を二回間違えると，動かす駒が点滅します．</p>
 </div>
 
 <div class="wrap" id="game" hidden>
   <div class="topbar">
-    <button class="back" id="backBtn" type="button">← 定跡の一覧</button>
-    <span class="eyebrow" id="sideLabel">先手で指す</span>
+    <button class="back" id="backBtn" type="button">← 一覧へ</button>
+    <span class="eyebrow" id="sideLabel"></span>
   </div>
   <div class="play">
     <div class="boardcol">
@@ -181,12 +222,18 @@ p { margin: 0; line-height: 1.8; }
       <div class="hand" id="handBottom"></div>
     </div>
     <div class="side">
-      <div>
-        <h2 id="lineName">矢倉</h2>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h2 id="lineName"></h2>
+        <div class="tagline" id="tagline"></div>
       </div>
       <div class="panel" id="talk">
         <div class="progress"><span id="bar" style="width:0%"></span></div>
-        <div class="prompt" id="prompt">あなたの番です</div>
+        <div class="question" id="question" hidden></div>
+        <div class="prompt" id="prompt"></div>
+        <div class="promo-choice" id="promoChoice" hidden>
+          <button class="btn" id="promoYes" type="button">成る</button>
+          <button class="btn ghost" id="promoNo" type="button">成らない</button>
+        </div>
         <div class="comment" id="comment"></div>
         <div class="row">
           <button class="btn ghost" id="hintBtn" type="button">ヒント</button>
@@ -194,12 +241,13 @@ p { margin: 0; line-height: 1.8; }
         </div>
       </div>
       <div class="panel done" id="donePanel" hidden>
-        <span class="eyebrow">手順を指し終えました</span>
+        <span class="eyebrow" id="doneEyebrow">指し終えました</span>
         <div class="stars" id="doneStars"></div>
         <p id="doneText"></p>
+        <p id="doneExplain" style="text-align:left;font-size:14px"></p>
         <div class="row" style="justify-content:center">
           <button class="btn" id="againBtn" type="button">もう一度</button>
-          <button class="btn ghost" id="nextBtn" type="button">次の定跡へ</button>
+          <button class="btn ghost" id="nextBtn" type="button">次へ</button>
         </div>
       </div>
       <div class="panel">
@@ -214,8 +262,59 @@ p { margin: 0; line-height: 1.8; }
 (() => {
   const $ = id => document.getElementById(id);
 
-  // ---------- 定跡データ ----------
-  // m: 移動元と移動先（筋段），"+" は成り．c: 解説（自分の手には必ず付ける）
+  // ---------- ルール（駒の動き・王手・詰みの判定） ----------
+  // minimal shogi rules for verification
+  const PROMOTABLE={歩:1,香:1,桂:1,銀:1,角:1,飛:1};
+  const GOLDLIKE=[[0,-1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1]];
+  const STEP={歩:[[0,-1]],金:GOLDLIKE,銀:[[0,-1],[1,-1],[-1,-1],[1,1],[-1,1]],玉:[[0,-1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[1,1],[-1,1]],桂:[[1,-2],[-1,-2]]};
+  const SLIDE={飛:[[0,1],[0,-1],[1,0],[-1,0]],角:[[1,1],[1,-1],[-1,1],[-1,-1]],香:[[0,-1]]};
+  function vectors(pc){ // returns {steps, slides} in sente orientation
+    if(pc.p){ if(pc.t==='飛')return{steps:[[1,1],[1,-1],[-1,1],[-1,-1]],slides:SLIDE.飛};
+      if(pc.t==='角')return{steps:[[0,1],[0,-1],[1,0],[-1,0]],slides:SLIDE.角};
+      return{steps:GOLDLIKE,slides:[]};}
+    return{steps:STEP[pc.t]||[],slides:SLIDE[pc.t]||[]};}
+  const on=(f,r)=>f>=1&&f<=9&&r>=1&&r<=9;
+  function targets(b,sq){const pc=b[sq];const f=sq/10|0,r=sq%10;const sg=pc.s==='s'?1:-1;const v=vectors(pc);const out=[];
+    for(const[a,c]of v.steps){const ff=f+a*sg,rr=r+c*sg;if(on(ff,rr))out.push(ff*10+rr);}
+    for(const[a,c]of v.slides){for(let k=1;k<9;k++){const ff=f+a*k*sg,rr=r+c*k*sg;if(!on(ff,rr))break;out.push(ff*10+rr);if(b[ff*10+rr])break;}}
+    return out;}
+  function attacked(b,sq,by){for(const k in b){if(b[k].s===by&&targets(b,+k).includes(sq))return true;}return false;}
+  function kingSq(b,s){for(const k in b)if(b[k].t==='玉'&&b[k].s===s)return +k;return null;}
+  function inCheck(b,s){const k=kingSq(b,s);return k!=null&&attacked(b,k,s==='s'?'g':'s');}
+  const zone=(s,r)=>s==='s'?r<=3:r>=7;
+  function mustPromote(t,s,r){const rr=s==='s'?r:10-r;return (t==='歩'||t==='香')&&rr===1||t==='桂'&&rr<=2;}
+  function apply(pos,m){const b={...pos.b};const h={s:{...pos.h.s},g:{...pos.h.g}};const s=m.s;
+    if(m.drop){b[m.to]={t:m.drop,s,p:false};h[s][m.drop]--;}
+    else{const pc=b[m.from];const cap=b[m.to];if(cap&&cap.t!=='玉')h[s][cap.t]=(h[s][cap.t]||0)+1;b[m.to]={t:pc.t,s,p:pc.p||!!m.promote};delete b[m.from];}
+    return{b,h};}
+  function legalMoves(pos,s){const out=[];const b=pos.b;
+    for(const k in b){const pc=b[k];if(pc.s!==s)continue;const from=+k;
+      for(const to of targets(b,from)){if(b[to]&&b[to].s===s)continue;const fr=from%10,tr=to%10;
+        const canP=PROMOTABLE[pc.t]&&!pc.p&&(zone(s,fr)||zone(s,tr));const must=!pc.p&&mustPromote(pc.t,s,tr);
+        const opts=must?[true]:canP?[true,false]:[false];
+        for(const pr of opts)out.push({s,from,to,promote:pr});}}
+    for(const t in pos.h[s]){if(!(pos.h[s][t]>0))continue;
+      for(let f=1;f<=9;f++)for(let r=1;r<=9;r++){const sq=f*10+r;if(b[sq])continue;if(mustPromote(t,s,r))continue;
+        if(t==='歩'){let ni=false;for(let rr=1;rr<=9;rr++){const q=b[f*10+rr];if(q&&q.s===s&&q.t==='歩'&&!q.p)ni=true;}if(ni)continue;}
+        out.push({s,drop:t,to:sq});}}
+    return out.filter(m=>!inCheck(apply(pos,m).b,s));}
+  function isMate(pos){return inCheck(pos.b,'g')&&legalMoves(pos,'g').length===0;}
+  function mateIn(pos,n){ // sente to move; returns list of first moves that force mate within n plies (n odd)
+    const res=[];for(const m of legalMoves(pos,'s')){const p2=apply(pos,m);if(!inCheck(p2.b,'g'))continue;
+      if(m.drop==='歩'&&isMate(p2))continue; // uchifuzume
+      if(forced(p2,n-1))res.push(m);}return res;}
+  function forced(p,n){const reps=legalMoves(p,'g');if(reps.length===0)return inCheck(p.b,'g');if(n<=0)return false;
+    for(const r of reps){const p3=apply(p,r);if(mateIn(p3,n-1).length===0)return false;}return true;}
+  const K=['','一','二','三','四','五','六','七','八','九'];
+  function str(m){return (m.drop?'*'+m.drop:''+m.from)+m.to+(m.promote?'+':'');}
+  function parsePos(S,G,H,GH){const b={};const rd=(str,s)=>{for(const tok of (str||'').split(/\s+/).filter(Boolean)){const map={竜:['飛',1],馬:['角',1],と:['歩',1]};const [t,p]=map[tok[0]]||[tok[0],0];b[+tok[1]*10+ +tok[2]]={t,s,p:!!p};}};
+    rd(S,'s');rd(G,'g');const hand=str=>{const h={};let last=null;for(const ch of (str||'')){if(/\d/.test(ch)){h[last]+=+ch-1;}else{h[ch]=(h[ch]||0)+1;last=ch;}}return h;};
+    return{b,h:{s:hand(H),g:hand(GH)}};}
+  function parseMove(m,s){if(m[0]==='*')return{s,drop:m[1],to:+m[2]*10+ +m[3]};return{s,from:+m[0]*10+ +m[1],to:+m[2]*10+ +m[3],promote:m.endsWith('+')};}
+
+  // ---------- データ ----------
+  // 定跡と手筋のデータ．index.html に埋め込んで使う．
+  // 指し手: "7776" = 7七→7六．末尾の "+" は成り．"*歩87" = 歩を8七に打つ．
   const LINES = [
     {
       id: 'yagura', name: '矢倉', mark: '銀', tag: '相居飛車', side: 's',
@@ -241,6 +340,53 @@ p { margin: 0; line-height: 1.8; }
       ],
     },
     {
+      id: 'gangi', name: '雁木', mark: '銀', tag: '相居飛車', side: 's',
+      desc: '6七と5七に銀を並べる囲い．横に広く，攻めにも転じやすい．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['8384', '△8四歩'],
+        ['7968', '▲6八銀', '左の銀を上がる．'],
+        ['3334', '△3四歩'],
+        ['6766', '▲6六歩', '角道を止める．'],
+        ['7162', '△6二銀'],
+        ['5756', '▲5六歩', '5筋の歩を突き，銀の通り道を作る．'],
+        ['5354', '△5四歩'],
+        ['3948', '▲4八銀', '右の銀も上がる．'],
+        ['3142', '△4二銀'],
+        ['4958', '▲5八金右', '右の金を中央へ寄せる．'],
+        ['4132', '△3二金'],
+        ['6867', '▲6七銀', '左の銀を6七へ．'],
+        ['5141', '△4一玉'],
+        ['4857', '▲5七銀', '右の銀を5七へ．6七と5七に銀が並ぶのが雁木の形．'],
+        ['6152', '△5二金'],
+        ['6978', '▲7八金', '金を寄せて守りを固める．'],
+        ['4233', '△3三銀'],
+        ['5969', '▲6九玉', '玉を囲いに入れて完成．横からの攻めに強く，駒が前に出やすい．'],
+      ],
+    },
+    {
+      id: 'aigakari', name: '相掛かり', mark: '飛', tag: '相居飛車', side: 's',
+      desc: 'お互いに角道を開けず，飛車先の歩を伸ばし合う．飛車が主役の力戦．',
+      moves: [
+        ['2726', '▲2六歩', '角道より先に飛車先の歩を伸ばす．'],
+        ['8384', '△8四歩'],
+        ['2625', '▲2五歩', 'さらに飛車先を伸ばす．'],
+        ['8485', '△8五歩'],
+        ['6978', '▲7八金', '8筋の歩交換に備えて，角の頭を金で守る．'],
+        ['4132', '△3二金'],
+        ['2524', '▲2四歩', '飛車先の歩を突き捨てる．'],
+        ['2324', '△同歩'],
+        ['2824', '▲同飛', '飛車で取り返して飛車先の歩交換．持ち駒に歩が一枚．'],
+        ['*歩23', '△2三歩'],
+        ['2428', '▲2八飛', '飛車を元の位置へ引く「引き飛車」．2六に引く「浮き飛車」もある．'],
+        ['8586', '△8六歩'],
+        ['8786', '▲同歩', '取らずにいると△8七歩成と攻め込まれる．'],
+        ['8286', '△同飛'],
+        ['*歩87', '▲8七歩', '歩を打って相手の飛車を追い返す．'],
+        ['8684', '△8四飛'],
+      ],
+    },
+    {
       id: 'kakugawari', name: '角換わり', mark: '角', tag: '相居飛車', side: 's',
       desc: '序盤で角を交換し，お互い角を持ち駒にして戦う．打ち込みのすきを作らない駒組みが大切．',
       moves: [
@@ -259,6 +405,65 @@ p { margin: 0; line-height: 1.8; }
         ['3948', '▲4八銀', '右の銀を上がる．角を打ち込まれるすきを消しながら攻めの準備．'],
         ['2233', '△3三銀'],
         ['2625', '▲2五歩', '飛車先をさらに伸ばす．ここから棒銀，早繰り銀，腰掛け銀と攻め方を選んでいく．'],
+      ],
+    },
+    {
+      id: 'kakubogin', name: '角換わり棒銀', mark: '銀', tag: '相居飛車', side: 's',
+      desc: '角換わりから，右の銀をまっすぐ2筋へ進めて飛車と一緒に攻める．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['8384', '△8四歩'],
+        ['2726', '▲2六歩', '飛車先の歩を伸ばす．'],
+        ['4132', '△3二金'],
+        ['6978', '▲7八金', '角の頭を金で守る．'],
+        ['8485', '△8五歩'],
+        ['8877', '▲7七角', '角を上がって8筋を受ける．'],
+        ['3334', '△3四歩'],
+        ['7988', '▲8八銀', '角の後ろに銀を置く．'],
+        ['2277+', '△7七角成'],
+        ['8877', '▲同銀', '銀で取り返して角交換．'],
+        ['3122', '△2二銀'],
+        ['2625', '▲2五歩', '飛車先を伸ばす．'],
+        ['2233', '△3三銀'],
+        ['3938', '▲3八銀', '右の銀をまっすぐ上がる．棒銀の始まり．'],
+        ['7162', '△6二銀'],
+        ['3827', '▲2七銀', '銀を飛車の前へ．'],
+        ['6364', '△6四歩'],
+        ['1716', '▲1六歩', '端歩を突いて，銀の進路を広げる．'],
+        ['1314', '△1四歩'],
+        ['2726', '▲2六銀', '銀が飛車の前に出た．'],
+        ['6263', '△6三銀'],
+        ['1615', '▲1五歩', '端歩を突き捨てる．'],
+        ['1415', '△同歩'],
+        ['2615', '▲同銀', '銀が1五に進出．次に▲2四歩から銀と飛車で2筋を突破するのが棒銀の狙い．'],
+      ],
+    },
+    {
+      id: 'koshikake', name: '角換わり腰掛け銀', mark: '銀', tag: '相居飛車', side: 's',
+      desc: '角換わりから，銀を5六に据えてバランスよく構える．プロでも多い形．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['8384', '△8四歩'],
+        ['2726', '▲2六歩', '飛車先の歩を伸ばす．'],
+        ['4132', '△3二金'],
+        ['6978', '▲7八金', '角の頭を金で守る．'],
+        ['8485', '△8五歩'],
+        ['8877', '▲7七角', '角を上がって8筋を受ける．'],
+        ['3334', '△3四歩'],
+        ['7988', '▲8八銀', '角の後ろに銀を置く．'],
+        ['2277+', '△7七角成'],
+        ['8877', '▲同銀', '銀で取り返して角交換．'],
+        ['3122', '△2二銀'],
+        ['3948', '▲4八銀', '右の銀を上がる．'],
+        ['2233', '△3三銀'],
+        ['2625', '▲2五歩', '飛車先を伸ばす．'],
+        ['7162', '△6二銀'],
+        ['4746', '▲4六歩', '4筋の歩を突いて，銀の通り道を作る．'],
+        ['6364', '△6四歩'],
+        ['4847', '▲4七銀', '銀を4七へ．'],
+        ['6263', '△6三銀'],
+        ['4756', '▲5六銀', '銀を5六へ．5七の歩の上に腰掛けるので「腰掛け銀」．'],
+        ['6354', '△5四銀'],
       ],
     },
     {
@@ -283,7 +488,88 @@ p { margin: 0; line-height: 1.8; }
       ],
     },
     {
-      id: 'shiken', name: '四間飛車', mark: '飛', tag: '振り飛車', side: 'g',
+      id: 'taishikenbogin', name: '棒銀（対四間飛車）', mark: '銀', tag: '対振り飛車', side: 's',
+      desc: '四間飛車に対して，銀を1五まで進めて端と2筋から角の頭を攻める．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['2726', '▲2六歩', '飛車先を伸ばす．'],
+        ['4344', '△4四歩'],
+        ['2625', '▲2五歩', '飛車先をさらに伸ばす．'],
+        ['2233', '△3三角'],
+        ['3948', '▲4八銀', '右の銀を上がる．'],
+        ['8242', '△4二飛'],
+        ['5968', '▲6八玉', '相手が振り飛車なので，玉は左へ移す．'],
+        ['5162', '△6二玉'],
+        ['6878', '▲7八玉', '玉をさらに左へ．'],
+        ['6272', '△7二玉'],
+        ['4958', '▲5八金右', '金を寄せて舟囲いを作る．'],
+        ['7282', '△8二玉'],
+        ['3736', '▲3六歩', '銀が上がる道を作る．'],
+        ['7172', '△7二銀'],
+        ['4837', '▲3七銀', '銀を3七へ．'],
+        ['5354', '△5四歩'],
+        ['3726', '▲2六銀', '銀を飛車の前に出す．棒銀の形．'],
+        ['6364', '△6四歩'],
+        ['2615', '▲1五銀', '銀を1五に進める．次に▲2四歩で角の頭を攻めるのが狙い．'],
+      ],
+    },
+    {
+      id: 'ibisha-anaguma', name: '居飛車穴熊', mark: '香', tag: '対振り飛車', side: 's',
+      desc: '玉を隅の9九に潜らせ，金銀で固める．王手がかかりにくい最も堅い囲いの一つ．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['2726', '▲2六歩', '飛車先を伸ばす．'],
+        ['4344', '△4四歩'],
+        ['3948', '▲4八銀', '右の銀を上がる．'],
+        ['8242', '△4二飛'],
+        ['5968', '▲6八玉', '玉を左へ．'],
+        ['5162', '△6二玉'],
+        ['6878', '▲7八玉', 'さらに左へ．'],
+        ['6272', '△7二玉'],
+        ['4958', '▲5八金右', '右の金を寄せる．'],
+        ['7282', '△8二玉'],
+        ['8877', '▲7七角', '角を上がって，玉の通り道を空ける．'],
+        ['7172', '△7二銀'],
+        ['7888', '▲8八玉', '玉を8八へ．'],
+        ['5354', '△5四歩'],
+        ['9998', '▲9八香', '香を一つ上がり，玉が入る穴を作る．'],
+        ['3132', '△3二銀'],
+        ['8899', '▲9九玉', '玉を隅の穴へ．'],
+        ['3243', '△4三銀'],
+        ['7988', '▲8八銀', '銀で玉にふたをする．'],
+        ['6364', '△6四歩'],
+        ['6979', '▲7九金', '金を寄せて穴熊の完成．玉が隅の奥にいるので，王手がかかりにくい．'],
+      ],
+    },
+    {
+      id: 'hidarimino', name: '左美濃', mark: '金', tag: '対振り飛車', side: 's',
+      desc: '振り飛車の美濃囲いを左右逆にした形．穴熊より早く組める．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['2726', '▲2六歩', '飛車先を伸ばす．'],
+        ['4344', '△4四歩'],
+        ['3948', '▲4八銀', '右の銀を上がる．'],
+        ['8242', '△4二飛'],
+        ['5968', '▲6八玉', '玉を左へ．'],
+        ['5162', '△6二玉'],
+        ['6878', '▲7八玉', 'さらに左へ．'],
+        ['6272', '△7二玉'],
+        ['4958', '▲5八金右', '右の金を寄せる．'],
+        ['7282', '△8二玉'],
+        ['8877', '▲7七角', '角を上がって玉の通り道を空ける．'],
+        ['7172', '△7二銀'],
+        ['7888', '▲8八玉', '玉を8八へ．'],
+        ['5354', '△5四歩'],
+        ['7978', '▲7八銀', '銀を7八へ．8八玉・7八銀・6九金・5八金の形が左美濃．'],
+        ['3132', '△3二銀'],
+        ['9796', '▲9六歩', '端歩を突いて玉の逃げ道を広げる．'],
+      ],
+    },
+    {
+      id: 'shikenbisha', name: '四間飛車', mark: '飛', tag: '振り飛車', side: 'g',
       desc: '飛車を4筋に振り，玉を反対側の美濃囲いへ．後手番で指す，振り飛車の基本形．',
       moves: [
         ['7776', '▲7六歩'],
@@ -302,6 +588,30 @@ p { margin: 0; line-height: 1.8; }
         ['7282', '△8二玉', '玉を8二へ．美濃囲いの玉の位置．'],
         ['5756', '▲5六歩'],
         ['7172', '△7二銀', '銀を玉の横へ．この後，4一の金を5二へ上がれば美濃囲いの完成．'],
+      ],
+    },
+    {
+      id: 'kakukoukan-shiken', name: '角交換四間飛車', mark: '角', tag: '振り飛車', side: 'g',
+      desc: '角道を止めずに四間飛車にし，自分から角を交換する．後手番で指す．',
+      moves: [
+        ['7776', '▲7六歩'],
+        ['3334', '△3四歩', '角道を開ける．'],
+        ['2726', '▲2六歩'],
+        ['8242', '△4二飛', '角道を止めずに飛車を4筋へ．'],
+        ['2625', '▲2五歩'],
+        ['2288+', '△8八角成', '自分から角を交換する．'],
+        ['7988', '▲同銀'],
+        ['3122', '△2二銀', '角を打たれるすきを消しながら，▲2四歩に備える．'],
+        ['3948', '▲4八銀'],
+        ['5162', '△6二玉', '玉を左へ．'],
+        ['5968', '▲6八玉'],
+        ['6272', '△7二玉', 'さらに左へ．'],
+        ['6878', '▲7八玉'],
+        ['7282', '△8二玉', '玉を8二へ．'],
+        ['4958', '▲5八金右'],
+        ['7172', '△7二銀', '美濃囲いの形にする．'],
+        ['3736', '▲3六歩'],
+        ['2233', '△3三銀', '銀を上がって2筋を守る．角交換型は，角を打ち込まれるすきに注意して駒組みする．'],
       ],
     },
     {
@@ -324,16 +634,350 @@ p { margin: 0; line-height: 1.8; }
         ['6272', '△7二玉', 'この後は△8二玉，△7二銀と美濃囲いに組んでいく．'],
       ],
     },
+    {
+      id: 'sankenbisha', name: '三間飛車', mark: '飛', tag: '振り飛車', side: 's',
+      desc: '飛車を7筋に振り，玉を右の美濃囲いへ．先手番で指す振り飛車．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['6766', '▲6六歩', '角道を止める．'],
+        ['8384', '△8四歩'],
+        ['2878', '▲7八飛', '飛車を7筋へ振る．これが三間飛車．'],
+        ['8485', '△8五歩'],
+        ['8877', '▲7七角', '8筋の攻めに備えて角を上がる．'],
+        ['7162', '△6二銀'],
+        ['5948', '▲4八玉', '玉を飛車と反対の右側へ．'],
+        ['5142', '△4二玉'],
+        ['4838', '▲3八玉', 'さらに右へ．'],
+        ['4232', '△3二玉'],
+        ['3828', '▲2八玉', '玉を2八へ．'],
+        ['6364', '△6四歩'],
+        ['3938', '▲3八銀', '銀を3八へ．'],
+        ['5354', '△5四歩'],
+        ['6958', '▲5八金左', '左の金を5八へ．玉2八・銀3八・金4九・金5八で美濃囲いの完成．'],
+      ],
+    },
+    {
+      id: 'mukaibisha', name: '向かい飛車', mark: '飛', tag: '振り飛車', side: 's',
+      desc: '飛車を8筋に振り，相手の飛車と向かい合う．8筋で反撃するのが狙い．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['6766', '▲6六歩', '角道を止める．'],
+        ['8384', '△8四歩'],
+        ['8877', '▲7七角', '先に角を上がって，飛車を8筋へ回す準備．'],
+        ['8485', '△8五歩'],
+        ['2888', '▲8八飛', '飛車を8筋へ．相手の飛車と向かい合うので「向かい飛車」．'],
+        ['7162', '△6二銀'],
+        ['5948', '▲4八玉', '玉を右へ．'],
+        ['5142', '△4二玉'],
+        ['4838', '▲3八玉', 'さらに右へ．'],
+        ['4232', '△3二玉'],
+        ['3828', '▲2八玉', '玉を2八へ．'],
+        ['6364', '△6四歩'],
+        ['3938', '▲3八銀', '銀を3八へ．'],
+        ['5354', '△5四歩'],
+        ['6958', '▲5八金左', '美濃囲いの完成．8筋で飛車がぶつかったら，交換して戦う．'],
+      ],
+    },
+    {
+      id: 'ishida', name: '石田流（早石田）', mark: '飛', tag: '振り飛車', side: 's',
+      desc: '7筋の歩を早く伸ばし，飛車・角・桂を連携させる攻撃的な三間飛車．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['7675', '▲7五歩', '7筋の歩をもう一つ伸ばす．石田流の出発点．'],
+        ['8384', '△8四歩'],
+        ['2878', '▲7八飛', '飛車を7筋へ．'],
+        ['8485', '△8五歩'],
+        ['5948', '▲4八玉', '玉を右へ．'],
+        ['7162', '△6二銀'],
+        ['4838', '▲3八玉', 'さらに右へ．'],
+        ['5142', '△4二玉'],
+        ['3828', '▲2八玉', '玉を2八へ．'],
+        ['4232', '△3二玉'],
+        ['3938', '▲3八銀', '美濃囲いを作る．'],
+        ['5354', '△5四歩'],
+        ['7876', '▲7六飛', '飛車を7六に上がる．8筋も横から守れる形．'],
+        ['1314', '△1四歩'],
+        ['9796', '▲9六歩', '端歩を突き，角の行き場所を作る．'],
+        ['6364', '△6四歩'],
+        ['8977', '▲7七桂', '桂を跳ねる．'],
+        ['6263', '△6三銀'],
+        ['8897', '▲9七角', '角を9七へ．飛車7六・角9七・桂7七の形が「石田流本組み」．'],
+      ],
+    },
+    {
+      id: 'onigoroshi', name: '鬼殺し', mark: '桂', tag: '奇襲', side: 's',
+      desc: '序盤から桂を跳ねて5三を狙う奇襲．正しく受けられると苦しいので，狙いと弱点をセットで覚える．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['8977', '▲7七桂', '序盤からいきなり桂を跳ねる．'],
+        ['8384', '△8四歩'],
+        ['7765', '▲6五桂', '桂を6五へ．5三と7三を狙う．'],
+        ['8485', '△8五歩'],
+        ['6553+', '▲5三桂成', '5三の歩を取って成桂を作る．△6二銀と5三を守られていたら，▲6五桂は△6四歩で取られてしまう．奇襲は相手の正しい受けも知っておくことが大切．'],
+      ],
+    },
+    {
+      id: 'sujichigai', name: '筋違い角', mark: '角', tag: '奇襲', side: 's',
+      desc: '序盤で角を交換し，すぐに角を打って歩を狙う．一歩得を目指す作戦．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['8822+', '▲2二角成', '自分から角を交換する．'],
+        ['3122', '△同銀'],
+        ['*角45', '▲4五角', '角を打って3四と6三の歩を同時に狙う．元の角とは違う筋に打つので「筋違い角」．'],
+        ['7162', '△6二銀'],
+        ['4534', '▲3四角', '3四の歩を取って一歩得．'],
+      ],
+    },
+    {
+      id: 'migishiken', name: '右四間飛車', mark: '飛', tag: '奇襲', side: 's',
+      desc: '飛車・銀・桂・歩を4筋に集め，一点突破を狙う．シンプルで破壊力のある作戦．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['8384', '△8四歩'],
+        ['7968', '▲6八銀', '左の銀を上がる．'],
+        ['3334', '△3四歩'],
+        ['6766', '▲6六歩', '角道を止める．'],
+        ['7162', '△6二銀'],
+        ['2848', '▲4八飛', '飛車を4筋へ．右側の4筋なので「右四間飛車」．'],
+        ['3142', '△4二銀'],
+        ['4746', '▲4六歩', '4筋の歩を伸ばす．'],
+        ['4132', '△3二金'],
+        ['3938', '▲3八銀', '右の銀を上がる．'],
+        ['5141', '△4一玉'],
+        ['3847', '▲4七銀', '飛車の前に銀を置いて，4筋を攻める準備．'],
+        ['6152', '△5二金'],
+        ['3736', '▲3六歩', '桂が跳ねる場所を空ける．'],
+        ['4233', '△3三銀'],
+        ['2937', '▲3七桂', '桂を跳ねて，飛・銀・桂・歩を4筋に集める．'],
+        ['6364', '△6四歩'],
+        ['4645', '▲4五歩', '4筋で戦いを始める．一点に戦力を集めるのが右四間飛車の考え方．'],
+      ],
+    },
   ];
 
-  // ---------- 盤 ----------
-  const KAN = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
-  const PROMO = { '歩': 'と', '香': '成香', '桂': '成桂', '銀': '成銀', '角': '馬', '飛': '龍' };
-  let board, hands, line, idx, mistakes, moveMistakes, hintsUsed, sel, lastTo, busy, timer;
+  // 手筋．S/G は先手・後手の駒（竜=成った飛，馬=成った角，と=成った歩），H は先手の持ち駒，GH は後手の持ち駒．
+  // L は手順．偶数番目があなたの手（正解の候補の配列），奇数番目が相手の応手．
+  // mate がある問題は詰将棋として，別の詰め方でも正解にする（手数は mate 手）．
+  const TESUJI = [
+    { n: '合駒請求', S: '歩13', G: '玉11 桂21', H: '角', GH: '金',
+      q: '玉は動けない．遠くから角で王手をして，相手に合駒を打たせよう．',
+      L: [['*角44', '*角55', '*角66', '*角77', '*角88', '*角99']],
+      e: '玉の逃げ道がないので，相手は間に駒を打つ（合駒）しかない．わざと遠くから王手して合駒を打たせ，その駒を取って自分の持ち駒にするのが「合駒請求」．' },
+    { n: '開き王手', S: '飛59 銀55', G: '玉51 飛44',
+      q: '銀を動かして後ろの飛車で王手をかけ，同時に相手の飛車を取ろう．',
+      L: [['5544']],
+      e: '前の駒が動くと，後ろの大駒の王手が生まれる．相手は王手を防ぐのに手一杯で，取られた飛車を取り返す余裕がない．' },
+    { n: '頭金', S: '歩53', G: '玉51', H: '金', mate: 1,
+      q: '玉の頭に金を打って詰ませよう．',
+      L: [['*金52']],
+      e: '玉の真上（頭）に金を打つ，詰みの基本形．金は前と斜め前と横に利くので，玉の逃げ道をまとめてふさげる．下から歩でひもを付けておくのがポイント．' },
+    { n: '合わせる', S: '金39', G: '飛24', H: '飛',
+      q: '相手の飛車が2筋に来ている．同じ筋に飛車を打ってぶつけよう（取られても取り返せる場所に）．',
+      L: [['*飛28']],
+      e: '相手の大駒と同じ筋に自分の大駒をぶつけるのが「合わせる」．相手は交換するか逃げるしかない．2八なら金がひもになっているので，取られても取り返せる．' },
+    { n: '一間竜', S: '竜33 桂24', G: '玉11', mate: 1,
+      q: '竜を動かして，玉と一マスあけた所から王手しよう．',
+      L: [['3331']],
+      e: '玉と竜の間を一マスあける形を「一間竜」と呼ぶ．竜は斜めにも一マス利くので，玉の逃げ道をまとめておさえられる．1二は桂がおさえている．' },
+    { n: '移動合い', S: '玉59 金69 金49 銀68 銀48', G: '飛51',
+      q: '飛車で王手されている．持ち駒はないので，盤上の金を動かして間に入れよう．',
+      L: [['6958', '4958']],
+      e: '盤上の駒を動かして王手を防ぐことを「移動合い」と言う．持ち駒がない時の大事な受け方．' },
+    { n: '浮く', S: '飛28 銀66', G: '桂54',
+      q: '6六の銀が桂に狙われている．飛車を2六に浮いて，横から銀にひもを付けよう．',
+      L: [['2826']],
+      e: '飛車を下段から上がる（浮く）と，横への利きが生まれる．攻めにも受けにも使える形．' },
+    { n: '打ち込み', G: '玉62 金52 銀72 香91 桂81', H: '飛',
+      q: '敵陣の，相手の駒が利いていない場所に飛車を打ち込もう．',
+      L: [['*飛11', '*飛21', '*飛31', '*飛41']],
+      e: '相手の駒が利いていない敵陣のすきに大駒を打ち込むと，次に成って竜になる．打つ前に，相手の駒がどこに利いているかを確かめるのがコツ．' },
+    { n: '打ち捨て', S: '竜41 桂25', G: '玉22 歩23 香11', H: '金2', mate: 3,
+      q: '3手で詰む．まず，ただで取られる1二に金を打とう．',
+      L: [['*金12'], '2212', []],
+      e: '取られる場所にわざと駒を打つのが「打ち捨て」．玉を1二に呼び寄せると，▲1三金の頭金で詰む．金を取らずに香で取っても詰む．' },
+    { n: 'おかわり', S: '飛28', G: '玉41 銀22 金32', H: '歩2',
+      q: '2三に歩を打って銀を釣り上げ，取られたらもう一度歩を打って，さらに釣り上げよう．最後は飛車で取る．',
+      L: [['*歩23'], '2223', ['*歩24'], '2324', ['2824']],
+      e: '同じ手筋をもう一度繰り返すのが「おかわり」．一回目で銀を2三に，二回目で2四まで引っぱり出し，最後は飛車でただで取る．' },
+    { n: '送りの手筋', S: '竜41 桂25', G: '玉22 歩23 香11', H: '金2', mate: 3,
+      q: '3手で詰む．まず3二に金を打って王手し，玉を1二へ送り込もう．',
+      L: [['*金32'], '2212', []],
+      e: '王手で玉を逃げ道の先へ送り，そこで詰ます．3二の金は竜がひもになっていて取れないので，玉は1二へ逃げるしかない．最後は▲1三金で詰み．' },
+    { n: '押し売り', S: '歩24', G: '玉22 金32 銀31',
+      q: '歩を2三へ突き出して，玉に取らせよう．',
+      L: [['2423', '2423+'], '2223'],
+      e: '相手が本当は取りたくない駒を，取らざるを得ない形で差し出す．玉が2三に上がると，守りの金銀から離れて寄せやすくなる．' },
+    { n: '顔面受け', S: '玉28 金39 香19 歩17', G: '銀37',
+      q: '銀で王手されている．玉自身で銀を取って受けよう．',
+      L: [['2837']],
+      e: '玉そのものを受けの駒として使う．玉は意外と強い守り駒で，ひもの付いていない駒なら自分で取れる．' },
+    { n: '逆王手', S: '玉59 銀47 金67', G: '飛51 玉45',
+      q: '飛車で王手されている．銀を間に入れて，同時に相手の玉に王手をかけよう．',
+      L: [['4756']],
+      e: '王手を防ぎながら，逆に相手へ王手をかけ返す．相手はまず自分の王手に対応しなければならず，攻めの流れを止められる．' },
+    { n: '銀ばさみ', S: '歩15 歩35 香19 金36', G: '銀24 香13 桂33', H: '歩',
+      q: '2四の銀を，両側の歩と協力して逃げられないようにしよう．',
+      L: [['*歩25']],
+      e: '銀の頭に歩を打ち，両側の歩と合わせて挟み撃ちにする．前の3マスはどれも取り返せる駒が守っていて，後ろも自分の駒でふさがっているので，銀は逃げられない．' },
+    { n: '桂頭の銀', S: '歩26 歩46', G: '桂33', H: '銀',
+      q: '3三の桂の頭に銀を打とう．',
+      L: [['*銀34']],
+      e: '桂は後ろや横に動けないので，頭に銀を打たれると弱い．跳ねる先の2五と4五は歩がおさえている．「桂頭の銀」は桂を取る定番の手筋．' },
+    { n: 'こびん攻め', G: '玉82 金72 銀71 香91 桂81 歩83 歩93', H: '角',
+      q: '玉の斜め前（こびん）の7三が空いている．角を打って王手しよう．',
+      L: [['*角64', '*角55', '*角46', '*角37', '*角28', '*角19']],
+      e: '玉の斜め前を「こびん」と呼ぶ．ここに歩がいないと，角の筋で直接玉をねらえる．美濃囲いの弱点になりやすい．' },
+    { n: '十字飛車', S: '飛78', G: '角72 銀34',
+      q: '飛車を一手動かして，角と銀を同時にねらおう．',
+      L: [['7874']],
+      e: '飛車の縦と横の利きで，二つの駒を同時にねらう両取りを「十字飛車」と言う．' },
+    { n: '手裏剣の歩', G: '角33 桂21 玉41', H: '歩',
+      q: '相手の角の頭に歩を打って，角を動かそう．',
+      L: [['*歩34']],
+      e: '大駒の頭に歩を打ち，働きのよい場所からどかせる．角は真上が弱点なので，歩一枚で動かせる．' },
+    { n: '焦点の歩', S: '飛39', G: '金43 銀33 桂21', H: '歩',
+      q: '金と銀の利きが重なる3四に歩を打とう．',
+      L: [['*歩34']],
+      e: '相手の駒の利きが集まる点（焦点）に歩を打つ．どの駒で取っても，その駒が元いた場所の守りが消える．' },
+    { n: '尻金', S: '竜44 角73 桂75', G: '玉52', H: '金', mate: 1,
+      q: '玉の後ろ（尻）に金を打って詰ませよう．',
+      L: [['*金51']],
+      e: '玉の後ろに打つ金を「尻金」と言う．上側を竜や桂でおさえておけば，後ろからの金で詰む．金には角がひもになっている．' },
+    { n: '捨てる', S: '飛28', G: '玉41 金32 桂21', H: '銀',
+      q: '銀を2三に捨てて金を釣り出し，飛車で取って竜を作ろう．',
+      L: [['*銀23'], '3223', ['2823+']],
+      e: '駒を捨てることで，もっと大きな得を狙う．銀と引き換えに金を取り，さらに竜を作れる．' },
+    { n: '素抜く', S: '飛28 銀25', G: '飛21 角34',
+      q: '銀で角を取ろう．同時に，後ろの飛車の利きが相手の飛車まで通る．',
+      L: [['2534']],
+      e: '前の駒をどかすと，後ろの大駒の利きが通って相手の駒をただで取れる．これを「素抜き」と言う．角を取られた上に，飛車も取られる形．' },
+    { n: '清算する', S: '飛28', G: '飛24 歩23',
+      q: '飛車同士を交換して，局面を単純にしよう．',
+      L: [['2824'], '2324'],
+      e: '駒を交換して局面を整理するのが「清算」．形勢が良い時は，駒を交換するほど相手の反撃の手段が減る．' },
+    { n: '底歩', S: '金49 玉58', G: '竜19', H: '歩',
+      q: '竜が横から金を狙っている．一番下の段に歩を打って止めよう．',
+      L: [['*歩29', '*歩39']],
+      e: '自陣の一番下の段に打つ歩を「底歩」と言う．竜の横の利きを止める，堅い受けの手筋．' },
+    { n: '退路封鎖', S: '歩14', G: '玉12 香11 桂21', H: '銀',
+      q: '玉が逃げ出しそうな2三に銀を打って，逃げ道をふさごう．',
+      L: [['*銀23']],
+      e: '玉の逃げ道に先回りして駒を置き，逃げ道をなくす．寄せでは，玉を包むように逃げ道から消していくのが基本．' },
+    { n: '叩きの歩', G: '金32 玉41', H: '歩',
+      q: '金の頭に歩を打って，金を前におびき出そう．',
+      L: [['*歩33'], '3233'],
+      e: '相手の駒の頭に歩を打って取らせ，その駒を悪い位置へ動かすのが「叩きの歩」．金は前に出ると玉から離れ，守りが弱くなる．' },
+    { n: 'ただ捨て', S: '飛28', G: '玉41 金32 銀22', H: '歩',
+      q: '3三に歩をただで捨てて金をどかし，2二の銀を飛車で取ろう．',
+      L: [['*歩33'], '3233', ['2822+']],
+      e: '取られるだけの場所に駒を打つのが「ただ捨て」．金が3三の歩を取ると，2二の銀を守る駒がいなくなる．' },
+    { n: '垂れ歩', G: '玉41 金51 銀31 桂21 香11', H: '歩',
+      q: '敵陣に歩を垂らして，次に成ってと金を作る狙いを見せよう．',
+      L: [['*歩24', '*歩23']],
+      e: '敵陣に歩を打ち，次に成ってと金を作る手を「垂れ歩」と言う．相手の駒が利いていない場所なら，すぐには取られない．' },
+    { n: 'ダンスの歩', G: '金42 玉51', H: '歩3',
+      q: '4三に歩を打って金を釣り上げよう．取られたら，次は金の斜め前に歩を打ち続ける．',
+      L: [['*歩43'], '4243', ['*歩54'], '4354', ['*歩45'], '5445'],
+      e: '歩を左右に打ち続け，金を踊らせるように引っぱり出す．金は玉からどんどん離れていき，守りがなくなる．' },
+    { n: '中合い', S: '玉59 銀68 銀48 桂49 桂69', G: '飛51', H: '歩',
+      q: '飛車で王手された．玉のすぐ前ではなく，間をあけた所に歩を合駒しよう．',
+      L: [['*歩53', '*歩54', '*歩55', '*歩56', '*歩57']],
+      e: '玉から離れた所に合駒をすることを「中合い」と言う．取られても，相手の飛車を玉から遠い位置に置いておける．' },
+    { n: '継ぎ桂', S: '桂45', G: '歩44', H: '桂',
+      q: '4五の桂が歩に狙われている．後ろから桂を打って支えよう．',
+      L: [['*桂37', '*桂57']],
+      e: '跳ねた桂の後ろに，もう一枚桂を打って支える．取られても桂で取り返して，さらに前へ進める．' },
+    { n: '突き捨て', S: '飛28 歩25', G: '歩23 銀22 玉41',
+      q: '2筋の歩を突き捨てて，飛車の通り道を作ろう．',
+      L: [['2524'], '2324', ['2824']],
+      e: '取られるのを承知で歩を突き，相手の歩をどかせる．飛車の通り道ができ，持ち駒に歩も増える．' },
+    { n: '継ぎ歩', S: '飛28', G: '歩24 銀33 玉41', H: '歩',
+      q: '2四の歩の目の前に歩を打って，相手の歩を引っぱり出そう．',
+      L: [['*歩25'], '2425', ['2825']],
+      e: '相手の歩の目の前に歩を打って取らせ，相手の歩を前に引き出す．飛車で取り返せば，相手陣の歩が一枚減ってすきができる．' },
+    { n: '手抜き', S: '歩53 銀88', G: '玉51 飛84', H: '金', mate: 1,
+      q: '8八の銀が飛車に狙われている．でも，それより速い手がある．',
+      L: [['*金52']],
+      e: '相手の攻めにあえて応じず，もっと大事な手を指すのが「手抜き」．詰ませてしまえば，取られそうな駒のことは気にしなくていい．' },
+    { n: '手待ち', S: '玉79 金78 銀68 歩97 歩17 歩66 歩57', G: '玉31 金41 銀42 歩93 歩13',
+      q: '今は形を崩したくない．形に関係のない端の歩を突いて，手番を相手に渡そう．',
+      L: [['9796', '1716']],
+      e: '動くと形が悪くなる時は，影響の少ない手を指して相手の出方を待つ．これを「手待ち」と言う．端歩はよく使われる．' },
+    { n: '田楽刺し', G: '角23 飛21', H: '香',
+      q: '香を打って，角とその後ろの飛車を串刺しにしよう．',
+      L: [['*香24', '*香25', '*香26', '*香27', '*香28', '*香29']],
+      e: '香で前の駒を狙い，その駒が逃げると後ろの駒が取れる形を「田楽刺し」と言う．田楽の串のように二つの駒を貫く．' },
+    { n: '遠見の角', G: '金72 玉51', H: '角',
+      q: '自陣に角を打って，遠く7二の金をにらもう．',
+      L: [['*角27', '*角18']],
+      e: '自陣の深い所から遠くまで利かせる角を「遠見の角」と言う．相手の駒に追われにくく，攻めと受けの両方に働く．' },
+    { n: '成り捨て', S: '歩24 飛28', G: '玉41 金32 銀22',
+      q: '歩を2三に成って捨て，銀に取らせてから飛車で取り返そう．',
+      L: [['2423+'], '2223', ['2823+']],
+      e: '成って駒を捨てるのが「成り捨て」．と金をただで取らせる代わりに，銀を2三に呼び出して飛車で取り，竜を作る．' },
+    { n: '跳ね違いの桂', S: '桂37', G: '歩24 桂23 玉41',
+      q: '3七の桂を跳ねよう．相手の歩や桂に取られない方へ．',
+      L: [['3745']],
+      e: '桂は跳ねる先を二つ選べる．相手の駒の利き（ここでは2五の歩）を避け，取られない方へ跳ねるのが基本．お互いの桂が交差するように跳ねる形になる．' },
+    { n: '早逃げ', S: '玉48 歩47 金58', G: '飛41',
+      q: '4筋に相手の飛車がいる．攻められる前に，玉を飛車の筋から逃がしておこう．',
+      L: [['4838', '4839']],
+      e: '危なくなる前に玉を安全な場所へ移すのが「早逃げ」．「玉の早逃げ八手の得」という格言がある．' },
+    { n: '腹銀', S: '歩14 歩23', G: '玉12 香11 桂21', H: '銀',
+      q: '玉の真横（腹）に銀を打とう．',
+      L: [['*銀22']],
+      e: '玉の真横に打つ銀を「腹銀」と言う．斜め後ろへの利きで玉の逃げ道をおさえ，次の詰みを狙う．' },
+    { n: '張り付く', S: '玉28 香19', G: 'と36', H: '金',
+      q: 'と金が迫っている．玉のそばに金を打って，ぴったり張り付いて守ろう．',
+      L: [['*金38', '*金37']],
+      e: '玉のすぐそばに金を打って守りを固める．玉に張り付いた金は，玉がひもになるので取られにくい．' },
+    { n: '控えの桂', G: '金32 銀52 歩44 玉41', H: '桂',
+      q: '桂を一段控えた所に打って，次に4四へ跳ねる狙いを作ろう．',
+      L: [['*桂36', '*桂56']],
+      e: 'すぐに当てずに，一段下に控えて打った桂．次に4四へ跳ねると，歩を取りながら金と銀の両取りになる．' },
+    { n: 'ひもを付ける', S: '銀55', G: '飛51', H: '歩',
+      q: '5五の銀が飛車に狙われている．歩を打って銀にひもを付けよう．',
+      L: [['*歩56']],
+      e: '駒を別の駒で守ることを「ひもを付ける」と言う．ひもの付いた駒は，取られても取り返せる．' },
+    { n: '蓋歩', G: '玉12 香11 桂21', H: '歩',
+      q: '玉が上へ逃げ出さないように，1四に歩を打って蓋をしよう．',
+      L: [['*歩14']],
+      e: '玉の上部に歩を打って蓋をし，上への逃げ道を消す．安い歩で大きな効果がある．' },
+    { n: 'ふんどしの桂', G: '金41 金61', H: '桂',
+      q: '桂を打って，二枚の金を同時に狙おう．',
+      L: [['*桂53']],
+      e: '桂で二つの駒を同時に狙う両取り．桂から左右に広がる利きが，ふんどしの形に似ていることから名付けられた．' },
+    { n: '両王手', S: '飛59 桂55', G: '玉51 金41 金61 銀42 銀62', mate: 1,
+      q: '桂を跳ねて，桂と飛車の二つで同時に王手しよう．',
+      L: [['5543', '5563']],
+      e: '二つの駒で同時に王手するのが「両王手」．合駒や駒を取ることでは防げず，玉が逃げるしかない．逃げ道がなければ詰み．' },
+    { n: '連打の歩', G: '金42 玉51', H: '歩2',
+      q: '金の頭に歩を続けて打ち，金を上へ引っぱり出そう．',
+      L: [['*歩43'], '4243', ['*歩44'], '4344'],
+      e: '同じ筋に歩を続けて打つのが「連打の歩」．金が玉から離れていくと，玉の守りが薄くなる．' },
+    { n: 'ロケット', S: '香25', G: '金22 歩23', H: '飛',
+      q: '香の後ろに飛車を打って，縦に並べよう．',
+      L: [['*飛26', '*飛27', '*飛28', '*飛29']],
+      e: '香の後ろに飛車を打ち，縦に並べて一点を突破する形を「ロケット」と言う．香と飛車が続けて突っ込むので，相手は受けきれない．' },
+    { n: '割り打ちの銀', G: '金42 飛62', H: '銀',
+      q: '金と飛車の間の後ろに銀を打って，両取りをかけよう．',
+      L: [['*銀51']],
+      e: '二つの駒の間の後ろに銀を打ち，斜め後ろの利きで両取りをかける．銀ならではの手筋．' },
+  ];
 
-  function initialBoard() {
+  const KAN = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  const PNAME = { '歩': 'と', '香': '成香', '桂': '成桂', '銀': '成銀', '角': '馬', '飛': '龍' };
+  const HAND_ORDER = ['飛', '角', '金', '銀', '桂', '香', '歩'];
+  const moverOf = i => (i % 2 === 0 ? 's' : 'g');
+
+  function initialPos() {
+    const back = ['香', '桂', '銀', '金', '玉', '金', '銀', '桂', '香'];
     const b = {};
-    const back = ['香', '桂', '銀', '金', '玉', '金', '銀', '桂', '香']; // 9筋→1筋
     for (let i = 0; i < 9; i++) {
       const f = 9 - i;
       b[f * 10 + 1] = { t: back[i], s: 'g', p: false };
@@ -341,130 +985,248 @@ p { margin: 0; line-height: 1.8; }
       b[f * 10 + 3] = { t: '歩', s: 'g', p: false };
       b[f * 10 + 7] = { t: '歩', s: 's', p: false };
     }
-    b[82] = { t: '飛', s: 'g', p: false };
-    b[22] = { t: '角', s: 'g', p: false };
-    b[88] = { t: '角', s: 's', p: false };
-    b[28] = { t: '飛', s: 's', p: false };
-    return b;
+    b[82] = { t: '飛', s: 'g', p: false }; b[22] = { t: '角', s: 'g', p: false };
+    b[88] = { t: '角', s: 's', p: false }; b[28] = { t: '飛', s: 's', p: false };
+    return { b, h: { s: {}, g: {} } };
   }
-  function parse(m) {
-    return { from: +m.slice(0, 2)[0] * 10 + +m[1], to: +m[2] * 10 + +m[3], promote: m.endsWith('+') };
-  }
-  function apply(mv) {
-    const p = board[mv.from];
-    const cap = board[mv.to];
-    if (cap) hands[p.s].push(cap.t);
-    board[mv.to] = { t: p.t, s: p.s, p: p.p || mv.promote };
-    delete board[mv.from];
-    lastTo = mv.to;
-  }
-  const moverOf = i => (i % 2 === 0 ? 's' : 'g');
 
-  // ---------- 進捗 ----------
-  let bestStars = {};
-  try { bestStars = JSON.parse(localStorage.getItem('joseki-stars') || '{}') || {}; } catch (e) {}
-  function saveStars(id, n) {
-    if ((bestStars[id] || 0) >= n) return;
-    bestStars[id] = n;
-    try { localStorage.setItem('joseki-stars', JSON.stringify(bestStars)); } catch (e) {}
+  // ---------- 記録 ----------
+  let best = {};
+  try { best = JSON.parse(localStorage.getItem('joseki-stars') || '{}') || {}; } catch (e) {}
+  function saveStars(key, n) {
+    if ((best[key] || 0) >= n) return;
+    best[key] = n;
+    try { localStorage.setItem('joseki-stars', JSON.stringify(best)); } catch (e) {}
   }
   const starHtml = n => '★'.repeat(n) + `<span class="off">${'★'.repeat(3 - n)}</span>`;
 
   // ---------- 一覧 ----------
-  function renderList() {
-    const box = $('list');
-    box.innerHTML = '';
-    LINES.forEach(L => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'item'; b.id = 'line-' + L.id;
-      const mine = L.moves.filter((_, i) => moverOf(i) === L.side).length;
-      b.innerHTML = `
-        <span class="mark">${L.mark}</span>
-        <span class="body">
-          <span class="name">${L.name}</span>
-          <span class="meta"><span>${L.tag}</span><span>${L.side === 's' ? '先手で指す' : '後手で指す'}</span><span>全${L.moves.length}手・あなたは${mine}手</span></span>
-          <span class="desc">${L.desc}</span>
-        </span>
-        <span class="stars" aria-label="最高 星${bestStars[L.id] || 0}">${starHtml(bestStars[L.id] || 0)}</span>`;
-      b.addEventListener('click', () => open(L));
-      box.appendChild(b);
+  let tab = 'J';
+  try { if (localStorage.getItem('joseki-tab') === 'T') tab = 'T'; } catch (e) {}
+  function setTab(t) {
+    tab = t;
+    try { localStorage.setItem('joseki-tab', t); } catch (e) {}
+    $('tabJ').setAttribute('aria-selected', String(t === 'J'));
+    $('tabT').setAttribute('aria-selected', String(t === 'T'));
+    $('paneJ').hidden = t !== 'J'; $('paneT').hidden = t !== 'T';
+  }
+  $('tabJ').addEventListener('click', () => setTab('J'));
+  $('tabT').addEventListener('click', () => setTab('T'));
+
+  function renderLists() {
+    const groups = [];
+    LINES.forEach(L => { let g = groups.find(x => x.tag === L.tag); if (!g) groups.push(g = { tag: L.tag, items: [] }); g.items.push(L); });
+    const pj = $('paneJ');
+    pj.innerHTML = '';
+    groups.forEach(g => {
+      const h = document.createElement('h3'); h.textContent = g.tag; pj.appendChild(h);
+      const list = document.createElement('div'); list.className = 'list';
+      g.items.forEach(L => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'item'; b.id = 'line-' + L.id;
+        const mine = L.moves.filter((_, i) => moverOf(i) === L.side).length;
+        const st = best[L.id] || 0;
+        b.innerHTML = `
+          <span class="mark">${L.mark}</span>
+          <span class="body">
+            <span class="name">${L.name}</span>
+            <span class="meta"><span>${L.side === 's' ? '先手で指す' : '後手で指す'}</span><span>全${L.moves.length}手・あなたは${mine}手</span></span>
+            <span class="desc">${L.desc}</span>
+          </span>
+          <span class="stars" aria-label="最高 星${st}">${starHtml(st)}</span>`;
+        b.addEventListener('click', () => open(josekiDrill(L)));
+        list.appendChild(b);
+      });
+      pj.appendChild(list);
     });
+    const pt = $('paneT');
+    const cleared = TESUJI.filter((_, i) => best['t:' + TESUJI[i].n] >= 1).length;
+    pt.innerHTML = `<p class="summary">全${TESUJI.length}問・クリア${cleared}問．「詰」と付いた問題は詰将棋で，別の詰め方でも正解になります．</p>`;
+    const grid = document.createElement('div'); grid.className = 'tgrid';
+    TESUJI.forEach((T, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'tsj'; b.id = 'tsj-' + i;
+      const st = best['t:' + T.n] || 0;
+      b.innerHTML = `<span class="tn">${T.n}</span><span class="tm"><span>${T.mate ? T.mate + '手詰' : '次の一手'}</span><span class="stars">${starHtml(st)}</span></span>`;
+      b.addEventListener('click', () => open(tesujiDrill(i)));
+      grid.appendChild(b);
+    });
+    pt.appendChild(grid);
+    $('countJ').textContent = LINES.length;
+    $('countT').textContent = TESUJI.length;
+  }
+
+  // ---------- 練習の組み立て ----------
+  function josekiDrill(L) {
+    return {
+      kind: 'J', key: L.id, name: L.name, side: L.side, mate: 0,
+      tags: [L.tag, L.side === 's' ? '先手（▲）で指す' : '後手（△）で指す'],
+      start: () => initialPos(),
+      steps: L.moves.map((x, i) => ({ who: moverOf(i) === L.side ? 'me' : 'opp', alts: [x[0]], label: x[1], c: x[2] })),
+      intro: L.desc, outro: '',
+      next: () => josekiDrill(LINES[(LINES.indexOf(L) + 1) % LINES.length]),
+    };
+  }
+  function tesujiDrill(i) {
+    const T = TESUJI[i];
+    return {
+      kind: 'T', key: 't:' + T.n, name: T.n, side: 's', mate: T.mate || 0,
+      tags: [T.mate ? `${T.mate}手詰` : '次の一手', '先手（▲）を持って解く', T.GH ? '相手の持ち駒あり' : '相手の持ち駒なし'],
+      start: () => parsePos(T.S || '', T.G || '', T.H || '', T.GH || ''),
+      steps: T.L.map((x, k) => ({ who: k % 2 ? 'opp' : 'me', alts: Array.isArray(x) ? x : [x] })),
+      question: T.q, outro: T.e,
+      next: () => tesujiDrill((i + 1) % TESUJI.length),
+    };
   }
 
   // ---------- 対局 ----------
-  function open(L) {
-    line = L;
+  let D, pos, idx, mistakes, moveMistakes, hintsUsed, sel, selHand, lastTo, prevTo, busy, timer, pendingPromo, history, altFound;
+
+  function open(drill) {
+    D = drill;
     $('home').hidden = true; $('game').hidden = false;
-    $('lineName').textContent = L.name;
-    $('sideLabel').textContent = L.side === 's' ? '先手（▲）で指す・盤の下側があなた' : '後手（△）で指す・盤の下側があなた';
+    $('lineName').textContent = D.name;
+    $('tagline').innerHTML = D.tags.map(t => `<span>${t}</span>`).join('');
+    $('sideLabel').textContent = D.side === 's' ? '盤の下側があなた（▲先手）' : '盤の下側があなた（△後手）';
     scrollTo(0, 0);
     restart();
   }
   function restart() {
     clearTimeout(timer);
-    board = initialBoard(); hands = { s: [], g: [] };
-    idx = 0; mistakes = 0; moveMistakes = 0; hintsUsed = 0; sel = null; lastTo = null; busy = false;
+    pos = D.start();
+    idx = 0; mistakes = 0; moveMistakes = 0; hintsUsed = 0;
+    sel = null; selHand = null; lastTo = null; prevTo = null; busy = false; pendingPromo = null;
+    history = []; altFound = false;
     $('donePanel').hidden = true; $('talk').hidden = false;
-    setComment(line.desc);
+    $('promoChoice').hidden = true;
+    $('question').hidden = !D.question;
+    $('question').textContent = D.question || '';
+    setComment(D.kind === 'J' ? D.intro : '');
     render();
     step();
   }
+  const isOver = () => idx >= D.steps.length || (D.mate && isMate(pos));
   function step() {
-    if (idx >= line.moves.length) return finish();
-    if (moverOf(idx) !== line.side) {
+    if (isOver()) return finish();
+    const st = D.steps[idx];
+    if (st.who === 'opp') {
       busy = true;
       setPrompt('相手が考えています…', '');
+      render();
       timer = setTimeout(() => {
-        const [m, label, c] = line.moves[idx];
-        apply(parse(m));
-        idx++;
+        const s = D.side === 's' ? 'g' : 's';
+        let mv = parseMove(st.alts[0], s);
+        const legal = legalMoves(pos, s);
+        if (!legal.some(m => str(m) === str(mv))) mv = legal[0]; // 詰将棋で別の手順になった時
+        const label = notate(mv, st);
+        play(mv, label);
         busy = false;
-        setComment(c ? `相手は${label}．${c}` : `相手は${label}と指しました．`);
-        render();
+        setComment(st.c ? `相手は${label}．${st.c}` : `相手は${label}と指しました．`);
         step();
       }, idx === 0 ? 500 : 650);
     } else {
       moveMistakes = 0;
-      setPrompt(`あなたの番です．${line.side === 's' ? '▲' : '△'}の次の一手は？`, '');
+      setPrompt(D.kind === 'J' ? `あなたの番です．${D.side === 's' ? '▲' : '△'}の次の一手は？` : 'あなたの番です．', '');
       render();
     }
   }
+  function play(mv, label) {
+    pos = apply(pos, mv);
+    history.push(label);
+    prevTo = mv.to; lastTo = mv.to;
+    idx++;
+  }
+  function notate(mv, st) {
+    if (st && st.label && st.alts[0] === str(mv)) return st.label;
+    const mark = mv.s === 's' ? '▲' : '△';
+    const dest = mv.to === prevTo ? '同' : `${mv.to / 10 | 0}${KAN[mv.to % 10]}`;
+    if (mv.drop) {
+      const couldMove = legalMoves(pos, mv.s).some(m => !m.drop && m.to === mv.to && pos.b[m.from].t === mv.drop && !pos.b[m.from].p);
+      return `${mark}${dest}${mv.drop}${couldMove ? '打' : ''}`;
+    }
+    const pc = pos.b[mv.from];
+    const name = pc.p ? PNAME[pc.t] : pc.t;
+    const opts = legalMoves(pos, mv.s).filter(m => m.from === mv.from && m.to === mv.to);
+    const suffix = opts.length > 1 ? (mv.promote ? '成' : '不成') : (mv.promote ? '成' : '');
+    return `${mark}${dest}${name}${suffix}`;
+  }
   function setPrompt(t, cls) { const el = $('prompt'); el.textContent = t; el.className = 'prompt ' + cls; }
   function setComment(t) { $('comment').textContent = t || ''; }
+  const myTurn = () => !busy && !isOver() && D.steps[idx].who === 'me' && !pendingPromo;
 
-  function tap(sq) {
-    if (busy || idx >= line.moves.length || moverOf(idx) !== line.side) return;
-    const p = board[sq];
-    if (p && p.s === line.side) {
+  function tapSquare(sq) {
+    if (!myTurn()) return;
+    const p = pos.b[sq];
+    if (p && p.s === D.side) {
+      selHand = null;
       sel = sel === sq ? null : sq;
       render();
       return;
     }
+    if (selHand) { tryMove({ s: D.side, drop: selHand, to: sq }); return; }
     if (sel == null) return;
-    const exp = parse(line.moves[idx][0]);
-    if (sel === exp.from && sq === exp.to) {
-      const [, label, c] = line.moves[idx];
-      apply(exp);
-      idx++; sel = null;
-      setPrompt(`正解！ ${label}`, 'ok');
-      setComment(c);
+    const opts = legalMoves(pos, D.side).filter(m => m.from === sel && m.to === sq);
+    if (!opts.length) { setPrompt('その駒はそこへは動けません', 'ng'); sel = null; render(); return; }
+    if (opts.length === 2) {
+      pendingPromo = { from: sel, to: sq };
+      $('promoChoice').hidden = false;
+      setPrompt('成りますか？', '');
+      render();
+      return;
+    }
+    tryMove(opts[0]);
+  }
+  function choosePromo(yes) {
+    if (!pendingPromo) return;
+    const mv = { s: D.side, from: pendingPromo.from, to: pendingPromo.to, promote: yes };
+    pendingPromo = null;
+    $('promoChoice').hidden = true;
+    tryMove(mv);
+  }
+  $('promoYes').addEventListener('click', () => choosePromo(true));
+  $('promoNo').addEventListener('click', () => choosePromo(false));
+
+  function tryMove(mv) {
+    const legal = legalMoves(pos, D.side);
+    if (!legal.some(m => str(m) === str(mv))) {
+      setPrompt(mv.drop ? 'そこには打てません（二歩や行き所のない駒に注意）' : 'その駒はそこへは動けません', 'ng');
+      sel = null; selHand = null; render(); return;
+    }
+    const st = D.steps[idx];
+    let ok = st.alts.includes(str(mv));
+    let alt = false;
+    if (D.mate) {
+      const after = apply(pos, mv);
+      const remain = D.mate - idx - 1;
+      const uchifu = mv.drop === '歩' && isMate(after);
+      const mating = !uchifu && inCheck(after.b, 'g') && forced(after, remain);
+      if (mating && !ok) { ok = true; alt = true; }
+      if (!mating) ok = false;
+    }
+    if (ok) {
+      const label = notate(mv, st);
+      play(mv, label);
+      sel = null; selHand = null;
+      if (alt) altFound = true;
+      setPrompt(alt ? `正解！ ${label}（別の詰め方）` : `正解！ ${label}`, 'ok');
+      setComment(st.c || '');
       render();
       busy = true;
       timer = setTimeout(() => { busy = false; step(); }, 700);
     } else {
       mistakes++; moveMistakes++;
-      const el = document.querySelector(`[data-sq="${sq}"]`);
+      const el = document.querySelector(`[data-sq="${mv.to}"]`);
       if (el) { el.classList.remove('wrong'); void el.offsetWidth; el.classList.add('wrong'); }
-      sel = null;
-      setPrompt(moveMistakes >= 2 ? 'その手ではありません．点滅している駒を動かします' : 'その手ではありません．もう一度考えてみよう', 'ng');
+      sel = null; selHand = null;
+      setPrompt(moveMistakes >= 2 ? 'その手ではありません．点滅している駒を使います' : 'その手ではありません．もう一度考えてみよう', 'ng');
       render();
     }
   }
   $('hintBtn').addEventListener('click', () => {
-    if (busy || idx >= line.moves.length || moverOf(idx) !== line.side) return;
+    if (!myTurn()) return;
     hintsUsed++;
     moveMistakes = Math.max(moveMistakes, 2);
-    setPrompt('点滅している駒を動かします', 'ng');
+    setPrompt('点滅している駒を使います', 'ng');
     render();
   });
   $('resetBtn').addEventListener('click', restart);
@@ -472,92 +1234,102 @@ p { margin: 0; line-height: 1.8; }
   $('backBtn').addEventListener('click', () => {
     clearTimeout(timer);
     $('game').hidden = true; $('home').hidden = false;
-    renderList();
+    renderLists();
+    setTab(D.kind);
   });
-  $('nextBtn').addEventListener('click', () => {
-    const i = LINES.indexOf(line);
-    open(LINES[(i + 1) % LINES.length]);
-  });
+  $('nextBtn').addEventListener('click', () => open(D.next()));
 
   function finish() {
     const miss = mistakes + hintsUsed;
     const stars = miss === 0 ? 3 : miss <= 2 ? 2 : 1;
-    saveStars(line.id, stars);
+    saveStars(D.key, stars);
     $('talk').hidden = true; $('donePanel').hidden = false;
+    $('doneEyebrow').textContent = D.mate ? '詰みました' : (D.kind === 'J' ? '手順を指し終えました' : '正解です');
     $('doneStars').innerHTML = starHtml(stars);
     $('doneText').textContent = miss === 0
-      ? `${line.name}の手順を間違えずに指せました．`
+      ? (D.kind === 'J' ? `${D.name}の手順を間違えずに指せました．` : '一回で正解しました．')
       : `間違い${mistakes}回，ヒント${hintsUsed}回．もう一度指すと手が覚えてきます．`;
+    $('doneExplain').textContent = D.outro ? `【${D.name}】${D.outro}${altFound ? '（今回は別の詰め方で正解しました．上の手順も試してみてください．）' : ''}` : '';
+    $('doneExplain').hidden = !D.outro;
+    $('nextBtn').textContent = D.kind === 'J' ? '次の定跡へ' : '次の手筋へ';
     render();
   }
 
   // ---------- 描画 ----------
+  function hintMove() {
+    if (!myTurn() || moveMistakes < 2) return null;
+    return parseMove(D.steps[idx].alts[0] || '', D.side);
+  }
   function render() {
-    const flip = line && line.side === 'g';
-    // 筋・段の目盛り
+    const flip = D.side === 'g';
     const files = [], ranks = [];
     for (let c = 0; c < 9; c++) files.push(`<span>${flip ? c + 1 : 9 - c}</span>`);
     for (let r = 0; r < 9; r++) ranks.push(`<span>${KAN[flip ? 9 - r : r + 1]}</span>`);
     $('files').innerHTML = files.join('');
     $('ranks').innerHTML = ranks.join('');
 
-    const exp = (line && idx < line.moves.length && moverOf(idx) === line.side) ? parse(line.moves[idx][0]) : null;
-    const showHint = exp && moveMistakes >= 2;
-    const box = $('board');
+    const hm = D.steps[idx] && D.steps[idx].alts[0] ? hintMove() : null;
     let html = '';
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 9; c++) {
         const f = flip ? c + 1 : 9 - c;
         const rk = flip ? 9 - r : r + 1;
         const sq = f * 10 + rk;
-        const p = board && board[sq];
+        const p = pos.b[sq];
         const cls = ['sq'];
         if (sq === lastTo) cls.push('last');
-        if (sq === sel) cls.push('sel');
-        if (showHint && sq === exp.from) cls.push('hint');
+        if (sq === sel || (pendingPromo && sq === pendingPromo.from)) cls.push('sel');
+        if (hm && ((!hm.drop && sq === hm.from) || (hm.drop && sq === hm.to))) cls.push('hint');
         let label = `${f}${KAN[rk]}`;
         let inner = '';
         if (p) {
-          const name = p.p ? PROMO[p.t] : (p.t === '玉' && p.s === 'g' ? '王' : p.t);
-          const opp = p.s !== (line ? line.side : 's');
+          const name = p.p ? PNAME[p.t] : (p.t === '玉' && p.s === 'g' ? '王' : p.t);
+          const opp = p.s !== D.side;
           inner = `<span class="pc${opp ? ' opp' : ''}${p.p ? ' promo' : ''}${name.length > 1 ? ' long' : ''}">${name}</span>`;
           label += ` ${p.s === 's' ? '先手' : '後手'}の${name}`;
         }
         html += `<button type="button" class="${cls.join(' ')}" data-sq="${sq}" aria-label="${label}">${inner}</button>`;
       }
     }
-    box.innerHTML = html;
+    $('board').innerHTML = html;
 
-    // 持ち駒
-    const handText = s => {
-      const h = hands ? hands[s] : [];
-      if (!h.length) return '<span>なし</span>';
-      const count = {};
-      h.forEach(t => count[t] = (count[t] || 0) + 1);
-      return Object.entries(count).map(([t, n]) => `<b>${t}</b>${n > 1 ? n : ''}`).join(' ');
+    const me = D.side, you = me === 's' ? 'g' : 's';
+    const handHtml = (s, clickable) => {
+      const h = pos.h[s];
+      const kinds = HAND_ORDER.filter(t => h[t] > 0);
+      if (!kinds.length) return '<span>なし</span>';
+      return kinds.map(t => clickable
+        ? `<button type="button" class="hp${hm && hm.drop === t ? ' hint' : ''}" data-hand="${t}" aria-pressed="${selHand === t}">${t}${h[t] > 1 ? `<small>${h[t]}</small>` : ''}</button>`
+        : `<b>${t}</b>${h[t] > 1 ? h[t] : ''}`).join(' ');
     };
-    const me = line ? line.side : 's', you = me === 's' ? 'g' : 's';
-    $('handTop').innerHTML = `<span>相手（${you === 's' ? '▲先手' : '△後手'}）の持ち駒</span> ${handText(you)}`;
-    $('handBottom').innerHTML = `<span>あなた（${me === 's' ? '▲先手' : '△後手'}）の持ち駒</span> ${handText(me)}`;
+    $('handTop').innerHTML = `<span>相手（${you === 's' ? '▲先手' : '△後手'}）の持ち駒</span> ${handHtml(you, false)}`;
+    $('handBottom').innerHTML = `<span>あなた（${me === 's' ? '▲先手' : '△後手'}）の持ち駒</span> ${handHtml(me, true)}`;
 
     // 棋譜
-    if (line) {
-      const items = line.moves.map(([, label], i) => {
-        if (i < idx) return `<li><span class="no">${i + 1}</span><span>${label}</span></li>`;
-        if (i === idx) return `<li class="now"><span class="no">${i + 1}</span><span>${moverOf(i) === 's' ? '▲' : '△'}？</span></li>`;
-        return `<li class="todo"><span class="no">${i + 1}</span><span>・・・</span></li>`;
-      });
-      $('kifu').innerHTML = items.join('');
-      const now = $('kifu').querySelector('.now');
-      if (now) { const k = $('kifu'); k.scrollTop = Math.max(0, now.offsetTop - k.offsetTop - 60); }
-      $('bar').style.width = `${(idx / line.moves.length) * 100}%`;
+    const items = history.map((l, i) => `<li><span class="no">${i + 1}</span><span>${l}</span></li>`);
+    if (!isOver()) {
+      const s = moverOf(idx) === 's' ? '▲' : '△';
+      items.push(`<li class="now"><span class="no">${idx + 1}</span><span>${D.steps[idx].who === 'me' ? s + '？' : s + '…'}</span></li>`);
+      if (D.kind === 'J') for (let i = idx + 1; i < D.steps.length; i++) items.push(`<li class="todo"><span class="no">${i + 1}</span><span>・・・</span></li>`);
     }
+    $('kifu').innerHTML = items.join('');
+    const now = $('kifu').querySelector('.now');
+    if (now) { const k = $('kifu'); k.scrollTop = Math.max(0, now.offsetTop - k.offsetTop - 60); }
+    $('bar').style.width = `${(Math.min(idx, D.steps.length) / D.steps.length) * 100}%`;
   }
   $('board').addEventListener('click', e => {
     const b = e.target.closest('.sq');
-    if (b) tap(+b.dataset.sq);
+    if (b) tapSquare(+b.dataset.sq);
+  });
+  $('handBottom').addEventListener('click', e => {
+    const b = e.target.closest('.hp');
+    if (!b || !myTurn()) return;
+    sel = null;
+    selHand = selHand === b.dataset.hand ? null : b.dataset.hand;
+    render();
   });
 
-  renderList();
+  renderLists();
+  setTab(tab);
 })();
 </script>
