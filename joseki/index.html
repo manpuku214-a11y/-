@@ -1,0 +1,563 @@
+<title>定跡なぞり</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* Layout: 一覧は定跡カードの一列．対局画面は盤を主役に，右（狭い画面では下）に棋譜と解説． */
+:root {
+  --bg: #eceee8;
+  --surface: #f7f8f4;
+  --ink: #1f1c16;
+  --muted: #6b6558;
+  --line: rgba(31, 28, 22, 0.14);
+  --board: #e2b768;
+  --grid: #5b3f1b;
+  --piece: #f4e2b8;
+  --piece-edge: #a77f3f;
+  --accent: #b8402b;
+  --good: #2f7a4a;
+  --hl: rgba(184, 64, 43, 0.22);
+  --last: rgba(47, 122, 74, 0.22);
+  --sign: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --ui: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161915; --surface: #1f231e; --ink: #e7e9e3; --muted: #a29d8f; --line: rgba(231, 233, 227, 0.14);
+    --board: #b98b47; --grid: #3d2a10; --piece: #ead6a6; --piece-edge: #8a6530;
+    --accent: #ec6b52; --good: #5cb97c; --hl: rgba(236, 107, 82, 0.32); --last: rgba(92, 185, 124, 0.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161915; --surface: #1f231e; --ink: #e7e9e3; --muted: #a29d8f; --line: rgba(231, 233, 227, 0.14);
+  --board: #b98b47; --grid: #3d2a10; --piece: #ead6a6; --piece-edge: #8a6530;
+  --accent: #ec6b52; --good: #5cb97c; --hl: rgba(236, 107, 82, 0.32); --last: rgba(92, 185, 124, 0.3);
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); }
+.wrap {
+  max-width: 980px; margin: 0 auto;
+  padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 20px;
+}
+h1, h2 { font-family: var(--sign); font-weight: 800; margin: 0; line-height: 1.2; text-wrap: balance; }
+h1 { font-size: clamp(30px, 7vw, 42px); }
+h2 { font-size: 24px; }
+p { margin: 0; line-height: 1.8; }
+.lead { color: var(--muted); max-width: 40em; }
+.eyebrow { font-size: 11px; letter-spacing: 0.2em; color: var(--muted); }
+
+/* 一覧 */
+.list { display: grid; gap: 10px; }
+.item {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+  text-align: left; font: inherit; color: inherit;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 14px 16px; cursor: pointer;
+}
+.item:hover { border-color: var(--ink); }
+.item .mark {
+  font-family: var(--sign); font-weight: 800; font-size: 22px;
+  width: 46px; height: 50px; display: grid; place-items: center;
+  background: var(--piece); color: #1f1c16; border: 1px solid var(--piece-edge);
+  clip-path: polygon(50% 0, 86% 16%, 100% 100%, 0 100%, 14% 16%);
+}
+.item .body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.item .name { font-family: var(--sign); font-weight: 800; font-size: 19px; }
+.item .meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.item .desc { font-size: 13px; line-height: 1.6; }
+.stars { font-size: 16px; letter-spacing: 2px; color: var(--accent); white-space: nowrap; }
+.stars .off { color: var(--line); }
+
+/* 対局画面 */
+.play { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+@media (max-width: 760px) { .play { grid-template-columns: 1fr; } }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.back {
+  font: 700 13px var(--ui); color: var(--ink); background: transparent;
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.boardcol { display: flex; flex-direction: column; gap: 8px; align-items: center; min-width: 0; }
+.hand {
+  width: min(100%, 520px); min-height: 34px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 13px; color: var(--muted);
+}
+.hand b { font-family: var(--sign); font-size: 18px; color: var(--ink); }
+.boardbox { width: min(100%, 520px); display: grid; grid-template-columns: 1fr 18px; gap: 4px; }
+.files { display: grid; grid-template-columns: repeat(9, 1fr); font-size: 11px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.ranks { display: grid; grid-template-rows: repeat(9, 1fr); font-family: var(--sign); font-size: 12px; color: var(--muted); align-items: center; text-align: center; }
+.board {
+  display: grid; grid-template-columns: repeat(9, 1fr);
+  background: var(--board); border: 2px solid var(--grid);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.sq {
+  aspect-ratio: 1 / 1.1; position: relative; padding: 0; margin: 0;
+  border: 0; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid);
+  background: transparent; cursor: pointer; display: grid; place-items: center; min-width: 0;
+}
+.sq:nth-child(9n) { border-right: 0; }
+.sq:nth-last-child(-n+9) { border-bottom: 0; }
+.sq.last { background: var(--last); }
+.sq.sel { background: var(--hl); }
+.sq.hint::after {
+  content: ""; position: absolute; inset: 3px; border: 2px dashed var(--accent); border-radius: 3px;
+  animation: blink 1s steps(2) infinite;
+}
+.sq.wrong { animation: shake .3s; }
+.sq:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; z-index: 1; }
+@keyframes blink { 50% { opacity: 0.3; } }
+@keyframes shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+.pc {
+  width: 84%; height: 90%;
+  display: grid; place-items: center;
+  background: var(--piece); color: #1f1c16;
+  clip-path: polygon(50% 0, 86% 15%, 100% 100%, 0 100%, 14% 15%);
+  font-family: var(--sign); font-weight: 800;
+  font-size: clamp(14px, 4.4vw, 26px); line-height: 1;
+  padding-top: 10%;
+  box-shadow: inset 0 -2px 0 var(--piece-edge);
+  pointer-events: none;
+}
+.pc.opp { transform: rotate(180deg); }
+.pc.promo { color: #b8402b; }
+.pc.long { font-size: clamp(10px, 3vw, 17px); writing-mode: vertical-rl; }
+
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.prompt { font-weight: 700; font-size: 15px; }
+.prompt.ok { color: var(--good); }
+.prompt.ng { color: var(--accent); }
+.comment { font-size: 14px; line-height: 1.8; min-height: 3.6em; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  font: 700 14px var(--ui); color: var(--bg); background: var(--ink);
+  border: 0; border-radius: 4px; padding: 10px 14px; cursor: pointer;
+}
+.btn.ghost { color: var(--ink); background: transparent; border: 1px solid var(--line); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn:focus-visible, .back:focus-visible, .item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kifu { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 10px; font-size: 14px; font-variant-numeric: tabular-nums; max-height: 260px; overflow-y: auto; }
+.kifu li { display: flex; gap: 6px; padding: 2px 4px; border-radius: 3px; }
+.kifu li .no { color: var(--muted); font-size: 11px; width: 1.8em; text-align: right; padding-top: 3px; }
+.kifu li.now { background: var(--hl); }
+.kifu li.todo { color: var(--muted); }
+.progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--good); transition: width .3s; }
+.done { text-align: center; gap: 12px; }
+.done .stars { font-size: 30px; }
+@media (prefers-reduced-motion: reduce) { .sq.hint::after, .sq.wrong { animation: none; } .progress span { transition: none; } }
+</style>
+
+<div class="wrap" id="home">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <span class="eyebrow">将棋 序盤の手順を指で覚える</span>
+    <h1>定跡なぞり</h1>
+    <p class="lead">代表的な定跡の出だしを，実際に駒を動かしながら覚えます．相手の手は自動で指されるので，あなたは自分の側の正しい一手を選んでください．間違えずに最後まで指せれば星三つです．</p>
+  </div>
+  <div class="list" id="list"></div>
+  <p class="lead" style="font-size:13px">操作：動かしたい駒をタップしてから，行き先のマスをタップ．同じ手を二回間違えると，動かす駒の場所が点滅します．</p>
+</div>
+
+<div class="wrap" id="game" hidden>
+  <div class="topbar">
+    <button class="back" id="backBtn" type="button">← 定跡の一覧</button>
+    <span class="eyebrow" id="sideLabel">先手で指す</span>
+  </div>
+  <div class="play">
+    <div class="boardcol">
+      <div class="hand" id="handTop"></div>
+      <div class="boardbox">
+        <div class="files" id="files"></div><div></div>
+        <div class="board" id="board"></div>
+        <div class="ranks" id="ranks"></div>
+      </div>
+      <div class="hand" id="handBottom"></div>
+    </div>
+    <div class="side">
+      <div>
+        <h2 id="lineName">矢倉</h2>
+      </div>
+      <div class="panel" id="talk">
+        <div class="progress"><span id="bar" style="width:0%"></span></div>
+        <div class="prompt" id="prompt">あなたの番です</div>
+        <div class="comment" id="comment"></div>
+        <div class="row">
+          <button class="btn ghost" id="hintBtn" type="button">ヒント</button>
+          <button class="btn ghost" id="resetBtn" type="button">最初から</button>
+        </div>
+      </div>
+      <div class="panel done" id="donePanel" hidden>
+        <span class="eyebrow">手順を指し終えました</span>
+        <div class="stars" id="doneStars"></div>
+        <p id="doneText"></p>
+        <div class="row" style="justify-content:center">
+          <button class="btn" id="againBtn" type="button">もう一度</button>
+          <button class="btn ghost" id="nextBtn" type="button">次の定跡へ</button>
+        </div>
+      </div>
+      <div class="panel">
+        <span class="eyebrow">棋譜</span>
+        <ol class="kifu" id="kifu"></ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ---------- 定跡データ ----------
+  // m: 移動元と移動先（筋段），"+" は成り．c: 解説（自分の手には必ず付ける）
+  const LINES = [
+    {
+      id: 'yagura', name: '矢倉', mark: '銀', tag: '相居飛車', side: 's',
+      desc: '角道を止めて，金銀三枚で玉を固める．じっくり組み合う将棋の基本形．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['8384', '△8四歩'],
+        ['7968', '▲6八銀', '角道を止める前に銀を上がっておく．急な攻めに備える一手．'],
+        ['3334', '△3四歩'],
+        ['6766', '▲6六歩', '角道を止めて，じっくり囲う方針を示す．'],
+        ['7162', '△6二銀'],
+        ['5756', '▲5六歩', '5筋の歩を突いて，駒の通り道を作る．'],
+        ['5354', '△5四歩'],
+        ['3948', '▲4八銀', '右の銀も中央へ寄せる．'],
+        ['3142', '△4二銀'],
+        ['4958', '▲5八金右', '右の金を寄せる．「右」は4九の金を動かすという意味．'],
+        ['4132', '△3二金'],
+        ['6978', '▲7八金', '左の金を囲いの位置へ．'],
+        ['5141', '△4一玉'],
+        ['5969', '▲6九玉', '玉を囲いの方へ寄せていく．'],
+        ['6152', '△5二金'],
+        ['6877', '▲7七銀', '7七銀と7八金が並び，矢倉囲いの骨組みができた．この後は6七金，玉を8八へと進めて完成させる．'],
+      ],
+    },
+    {
+      id: 'kakugawari', name: '角換わり', mark: '角', tag: '相居飛車', side: 's',
+      desc: '序盤で角を交換し，お互い角を持ち駒にして戦う．打ち込みのすきを作らない駒組みが大切．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['8384', '△8四歩'],
+        ['2726', '▲2六歩', '飛車先の歩を伸ばす．'],
+        ['4132', '△3二金'],
+        ['6978', '▲7八金', '8筋から攻められる角の頭を，金で先に守っておく．'],
+        ['8485', '△8五歩'],
+        ['8877', '▲7七角', '角を上がって8筋の攻めを受ける．角交換の準備でもある．'],
+        ['3334', '△3四歩'],
+        ['7988', '▲8八銀', '角の後ろに銀を置く．角を取られたら銀で取り返せる．'],
+        ['2277+', '△7七角成'],
+        ['8877', '▲同銀', '銀で取り返して角の交換が成立．お互いに角を一枚ずつ持ち駒にした．'],
+        ['3122', '△2二銀'],
+        ['3948', '▲4八銀', '右の銀を上がる．角を打ち込まれるすきを消しながら攻めの準備．'],
+        ['2233', '△3三銀'],
+        ['2625', '▲2五歩', '飛車先をさらに伸ばす．ここから棒銀，早繰り銀，腰掛け銀と攻め方を選んでいく．'],
+      ],
+    },
+    {
+      id: 'yokofu', name: '横歩取り', mark: '飛', tag: '相居飛車', side: 's',
+      desc: 'お互いに飛車先の歩を交換し，先手が3四の歩を飛車で取る．序盤から激しくなりやすい．',
+      moves: [
+        ['7776', '▲7六歩', '角道を開ける．'],
+        ['3334', '△3四歩'],
+        ['2726', '▲2六歩', '飛車先の歩を伸ばす．'],
+        ['8384', '△8四歩'],
+        ['2625', '▲2五歩', 'さらに飛車先を伸ばす．'],
+        ['8485', '△8五歩'],
+        ['6978', '▲7八金', '飛車先交換の前に，角の頭を金で守っておく．'],
+        ['4132', '△3二金'],
+        ['2524', '▲2四歩', '飛車先の歩を突き捨てる．'],
+        ['2324', '△同歩'],
+        ['2824', '▲同飛', '飛車で取り返して，飛車先の歩交換ができた．持ち駒に歩が一枚．'],
+        ['8586', '△8六歩'],
+        ['8786', '▲同歩', '取らずにいると△8七歩成と攻め込まれる．'],
+        ['8286', '△同飛'],
+        ['2434', '▲3四飛', '3四の歩を飛車で取る．これが「横歩取り」．一歩得だが飛車が狙われやすく，ここから激しい戦いになる．'],
+      ],
+    },
+    {
+      id: 'shiken', name: '四間飛車', mark: '飛', tag: '振り飛車', side: 'g',
+      desc: '飛車を4筋に振り，玉を反対側の美濃囲いへ．後手番で指す，振り飛車の基本形．',
+      moves: [
+        ['7776', '▲7六歩'],
+        ['3334', '△3四歩', '角道を開ける．'],
+        ['2726', '▲2六歩'],
+        ['4344', '△4四歩', '角道を止める．振り飛車は角道を止めて，じっくり構えることが多い．'],
+        ['2625', '▲2五歩'],
+        ['2233', '△3三角', '▲2四歩からの飛車先交換に備えて，角を上がっておく．'],
+        ['3948', '▲4八銀'],
+        ['8242', '△4二飛', '飛車を4筋に振る．これが四間飛車．'],
+        ['5968', '▲6八玉'],
+        ['5162', '△6二玉', '玉を飛車と反対側へ移していく．'],
+        ['6878', '▲7八玉'],
+        ['6272', '△7二玉', 'さらに玉を左へ．'],
+        ['4958', '▲5八金右'],
+        ['7282', '△8二玉', '玉を8二へ．美濃囲いの玉の位置．'],
+        ['5756', '▲5六歩'],
+        ['7172', '△7二銀', '銀を玉の横へ．この後，4一の金を5二へ上がれば美濃囲いの完成．'],
+      ],
+    },
+    {
+      id: 'gokigen', name: 'ゴキゲン中飛車', mark: '王', tag: '振り飛車', side: 'g',
+      desc: '角道を開けたまま飛車を5筋へ．中央から積極的に動く，後手番の中飛車．',
+      moves: [
+        ['7776', '▲7六歩'],
+        ['3334', '△3四歩', '角道を開ける．'],
+        ['2726', '▲2六歩'],
+        ['5354', '△5四歩', '5筋の歩を突く．中飛車にする合図．'],
+        ['2625', '▲2五歩'],
+        ['8252', '△5二飛', '飛車を中央の5筋へ振る．'],
+        ['3948', '▲4八銀'],
+        ['5455', '△5五歩', '5筋の位を取る．角道を開けたまま戦うのがゴキゲン中飛車の特徴．'],
+        ['5968', '▲6八玉'],
+        ['2233', '△3三角', '▲2四歩からの飛車先交換に備える．'],
+        ['6878', '▲7八玉'],
+        ['5162', '△6二玉', '玉を飛車と反対側へ．'],
+        ['4958', '▲5八金右'],
+        ['6272', '△7二玉', 'この後は△8二玉，△7二銀と美濃囲いに組んでいく．'],
+      ],
+    },
+  ];
+
+  // ---------- 盤 ----------
+  const KAN = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  const PROMO = { '歩': 'と', '香': '成香', '桂': '成桂', '銀': '成銀', '角': '馬', '飛': '龍' };
+  let board, hands, line, idx, mistakes, moveMistakes, hintsUsed, sel, lastTo, busy, timer;
+
+  function initialBoard() {
+    const b = {};
+    const back = ['香', '桂', '銀', '金', '玉', '金', '銀', '桂', '香']; // 9筋→1筋
+    for (let i = 0; i < 9; i++) {
+      const f = 9 - i;
+      b[f * 10 + 1] = { t: back[i], s: 'g', p: false };
+      b[f * 10 + 9] = { t: back[i], s: 's', p: false };
+      b[f * 10 + 3] = { t: '歩', s: 'g', p: false };
+      b[f * 10 + 7] = { t: '歩', s: 's', p: false };
+    }
+    b[82] = { t: '飛', s: 'g', p: false };
+    b[22] = { t: '角', s: 'g', p: false };
+    b[88] = { t: '角', s: 's', p: false };
+    b[28] = { t: '飛', s: 's', p: false };
+    return b;
+  }
+  function parse(m) {
+    return { from: +m.slice(0, 2)[0] * 10 + +m[1], to: +m[2] * 10 + +m[3], promote: m.endsWith('+') };
+  }
+  function apply(mv) {
+    const p = board[mv.from];
+    const cap = board[mv.to];
+    if (cap) hands[p.s].push(cap.t);
+    board[mv.to] = { t: p.t, s: p.s, p: p.p || mv.promote };
+    delete board[mv.from];
+    lastTo = mv.to;
+  }
+  const moverOf = i => (i % 2 === 0 ? 's' : 'g');
+
+  // ---------- 進捗 ----------
+  let bestStars = {};
+  try { bestStars = JSON.parse(localStorage.getItem('joseki-stars') || '{}') || {}; } catch (e) {}
+  function saveStars(id, n) {
+    if ((bestStars[id] || 0) >= n) return;
+    bestStars[id] = n;
+    try { localStorage.setItem('joseki-stars', JSON.stringify(bestStars)); } catch (e) {}
+  }
+  const starHtml = n => '★'.repeat(n) + `<span class="off">${'★'.repeat(3 - n)}</span>`;
+
+  // ---------- 一覧 ----------
+  function renderList() {
+    const box = $('list');
+    box.innerHTML = '';
+    LINES.forEach(L => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'item'; b.id = 'line-' + L.id;
+      const mine = L.moves.filter((_, i) => moverOf(i) === L.side).length;
+      b.innerHTML = `
+        <span class="mark">${L.mark}</span>
+        <span class="body">
+          <span class="name">${L.name}</span>
+          <span class="meta"><span>${L.tag}</span><span>${L.side === 's' ? '先手で指す' : '後手で指す'}</span><span>全${L.moves.length}手・あなたは${mine}手</span></span>
+          <span class="desc">${L.desc}</span>
+        </span>
+        <span class="stars" aria-label="最高 星${bestStars[L.id] || 0}">${starHtml(bestStars[L.id] || 0)}</span>`;
+      b.addEventListener('click', () => open(L));
+      box.appendChild(b);
+    });
+  }
+
+  // ---------- 対局 ----------
+  function open(L) {
+    line = L;
+    $('home').hidden = true; $('game').hidden = false;
+    $('lineName').textContent = L.name;
+    $('sideLabel').textContent = L.side === 's' ? '先手（▲）で指す・盤の下側があなた' : '後手（△）で指す・盤の下側があなた';
+    scrollTo(0, 0);
+    restart();
+  }
+  function restart() {
+    clearTimeout(timer);
+    board = initialBoard(); hands = { s: [], g: [] };
+    idx = 0; mistakes = 0; moveMistakes = 0; hintsUsed = 0; sel = null; lastTo = null; busy = false;
+    $('donePanel').hidden = true; $('talk').hidden = false;
+    setComment(line.desc);
+    render();
+    step();
+  }
+  function step() {
+    if (idx >= line.moves.length) return finish();
+    if (moverOf(idx) !== line.side) {
+      busy = true;
+      setPrompt('相手が考えています…', '');
+      timer = setTimeout(() => {
+        const [m, label, c] = line.moves[idx];
+        apply(parse(m));
+        idx++;
+        busy = false;
+        setComment(c ? `相手は${label}．${c}` : `相手は${label}と指しました．`);
+        render();
+        step();
+      }, idx === 0 ? 500 : 650);
+    } else {
+      moveMistakes = 0;
+      setPrompt(`あなたの番です．${line.side === 's' ? '▲' : '△'}の次の一手は？`, '');
+      render();
+    }
+  }
+  function setPrompt(t, cls) { const el = $('prompt'); el.textContent = t; el.className = 'prompt ' + cls; }
+  function setComment(t) { $('comment').textContent = t || ''; }
+
+  function tap(sq) {
+    if (busy || idx >= line.moves.length || moverOf(idx) !== line.side) return;
+    const p = board[sq];
+    if (p && p.s === line.side) {
+      sel = sel === sq ? null : sq;
+      render();
+      return;
+    }
+    if (sel == null) return;
+    const exp = parse(line.moves[idx][0]);
+    if (sel === exp.from && sq === exp.to) {
+      const [, label, c] = line.moves[idx];
+      apply(exp);
+      idx++; sel = null;
+      setPrompt(`正解！ ${label}`, 'ok');
+      setComment(c);
+      render();
+      busy = true;
+      timer = setTimeout(() => { busy = false; step(); }, 700);
+    } else {
+      mistakes++; moveMistakes++;
+      const el = document.querySelector(`[data-sq="${sq}"]`);
+      if (el) { el.classList.remove('wrong'); void el.offsetWidth; el.classList.add('wrong'); }
+      sel = null;
+      setPrompt(moveMistakes >= 2 ? 'その手ではありません．点滅している駒を動かします' : 'その手ではありません．もう一度考えてみよう', 'ng');
+      render();
+    }
+  }
+  $('hintBtn').addEventListener('click', () => {
+    if (busy || idx >= line.moves.length || moverOf(idx) !== line.side) return;
+    hintsUsed++;
+    moveMistakes = Math.max(moveMistakes, 2);
+    setPrompt('点滅している駒を動かします', 'ng');
+    render();
+  });
+  $('resetBtn').addEventListener('click', restart);
+  $('againBtn').addEventListener('click', restart);
+  $('backBtn').addEventListener('click', () => {
+    clearTimeout(timer);
+    $('game').hidden = true; $('home').hidden = false;
+    renderList();
+  });
+  $('nextBtn').addEventListener('click', () => {
+    const i = LINES.indexOf(line);
+    open(LINES[(i + 1) % LINES.length]);
+  });
+
+  function finish() {
+    const miss = mistakes + hintsUsed;
+    const stars = miss === 0 ? 3 : miss <= 2 ? 2 : 1;
+    saveStars(line.id, stars);
+    $('talk').hidden = true; $('donePanel').hidden = false;
+    $('doneStars').innerHTML = starHtml(stars);
+    $('doneText').textContent = miss === 0
+      ? `${line.name}の手順を間違えずに指せました．`
+      : `間違い${mistakes}回，ヒント${hintsUsed}回．もう一度指すと手が覚えてきます．`;
+    render();
+  }
+
+  // ---------- 描画 ----------
+  function render() {
+    const flip = line && line.side === 'g';
+    // 筋・段の目盛り
+    const files = [], ranks = [];
+    for (let c = 0; c < 9; c++) files.push(`<span>${flip ? c + 1 : 9 - c}</span>`);
+    for (let r = 0; r < 9; r++) ranks.push(`<span>${KAN[flip ? 9 - r : r + 1]}</span>`);
+    $('files').innerHTML = files.join('');
+    $('ranks').innerHTML = ranks.join('');
+
+    const exp = (line && idx < line.moves.length && moverOf(idx) === line.side) ? parse(line.moves[idx][0]) : null;
+    const showHint = exp && moveMistakes >= 2;
+    const box = $('board');
+    let html = '';
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const f = flip ? c + 1 : 9 - c;
+        const rk = flip ? 9 - r : r + 1;
+        const sq = f * 10 + rk;
+        const p = board && board[sq];
+        const cls = ['sq'];
+        if (sq === lastTo) cls.push('last');
+        if (sq === sel) cls.push('sel');
+        if (showHint && sq === exp.from) cls.push('hint');
+        let label = `${f}${KAN[rk]}`;
+        let inner = '';
+        if (p) {
+          const name = p.p ? PROMO[p.t] : (p.t === '玉' && p.s === 'g' ? '王' : p.t);
+          const opp = p.s !== (line ? line.side : 's');
+          inner = `<span class="pc${opp ? ' opp' : ''}${p.p ? ' promo' : ''}${name.length > 1 ? ' long' : ''}">${name}</span>`;
+          label += ` ${p.s === 's' ? '先手' : '後手'}の${name}`;
+        }
+        html += `<button type="button" class="${cls.join(' ')}" data-sq="${sq}" aria-label="${label}">${inner}</button>`;
+      }
+    }
+    box.innerHTML = html;
+
+    // 持ち駒
+    const handText = s => {
+      const h = hands ? hands[s] : [];
+      if (!h.length) return '<span>なし</span>';
+      const count = {};
+      h.forEach(t => count[t] = (count[t] || 0) + 1);
+      return Object.entries(count).map(([t, n]) => `<b>${t}</b>${n > 1 ? n : ''}`).join(' ');
+    };
+    const me = line ? line.side : 's', you = me === 's' ? 'g' : 's';
+    $('handTop').innerHTML = `<span>相手（${you === 's' ? '▲先手' : '△後手'}）の持ち駒</span> ${handText(you)}`;
+    $('handBottom').innerHTML = `<span>あなた（${me === 's' ? '▲先手' : '△後手'}）の持ち駒</span> ${handText(me)}`;
+
+    // 棋譜
+    if (line) {
+      const items = line.moves.map(([, label], i) => {
+        if (i < idx) return `<li><span class="no">${i + 1}</span><span>${label}</span></li>`;
+        if (i === idx) return `<li class="now"><span class="no">${i + 1}</span><span>${moverOf(i) === 's' ? '▲' : '△'}？</span></li>`;
+        return `<li class="todo"><span class="no">${i + 1}</span><span>・・・</span></li>`;
+      });
+      $('kifu').innerHTML = items.join('');
+      const now = $('kifu').querySelector('.now');
+      if (now) { const k = $('kifu'); k.scrollTop = Math.max(0, now.offsetTop - k.offsetTop - 60); }
+      $('bar').style.width = `${(idx / line.moves.length) * 100}%`;
+    }
+  }
+  $('board').addEventListener('click', e => {
+    const b = e.target.closest('.sq');
+    if (b) tap(+b.dataset.sq);
+  });
+
+  renderList();
+})();
+</script>
