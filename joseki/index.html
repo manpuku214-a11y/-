@@ -186,6 +186,13 @@ p { margin: 0; line-height: 1.8; }
 .hp:disabled { cursor: default; }
 .question { font-size: 14px; line-height: 1.8; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--bg); }
 .promo-choice { display: flex; gap: 8px; }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.mode { font: 700 14px var(--ui); color: var(--muted); background: var(--surface); border: 0; padding: 10px 8px; cursor: pointer; }
+.mode + .mode { border-left: 1px solid var(--line); }
+.mode[aria-selected="true"] { color: var(--bg); background: var(--ink); }
+.mode:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sq.from { box-shadow: inset 0 0 0 3px var(--last); }
+.demo-note { font-size: 13px; color: var(--muted); }
 .tagline { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
 .tagline span { border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
 @media (prefers-reduced-motion: reduce) { .hp.hint { animation: none; } }
@@ -195,7 +202,7 @@ p { margin: 0; line-height: 1.8; }
   <div style="display:flex;flex-direction:column;gap:10px">
     <span class="eyebrow">将棋 序盤と手筋を指で覚える</span>
     <h1>定跡なぞり</h1>
-    <p class="lead">定跡は相手の手が自動で指されるので，自分の側の正しい一手を指します．手筋は問題の局面で，その手筋を使った一手を指します．間違えずに指せれば星三つです．</p>
+    <p class="lead">初めて開く定跡や手筋は「お手本」から始まります．正しい手順を一手ずつ解説付きで見てから，「自分で指す」で覚えたか確かめましょう．間違えずに指せれば星三つです．</p>
   </div>
   <div class="tabs" role="tablist">
     <button class="tab" id="tabJ" role="tab" type="button" aria-selected="true">定跡<span class="count" id="countJ"></span></button>
@@ -225,6 +232,20 @@ p { margin: 0; line-height: 1.8; }
       <div style="display:flex;flex-direction:column;gap:6px">
         <h2 id="lineName"></h2>
         <div class="tagline" id="tagline"></div>
+      </div>
+      <div class="modes" role="tablist">
+        <button class="mode" id="modeDemo" role="tab" type="button" aria-selected="false">お手本を見る</button>
+        <button class="mode" id="modeTry" role="tab" type="button" aria-selected="true">自分で指す</button>
+      </div>
+      <div class="panel" id="demoPanel" hidden>
+        <div class="progress"><span id="demoBar" style="width:0%"></span></div>
+        <div class="prompt" id="demoMove"></div>
+        <div class="comment" id="demoComment"></div>
+        <div class="row">
+          <button class="btn ghost" id="demoPrev" type="button">◀ 戻る</button>
+          <button class="btn" id="demoNext" type="button">次の手 ▶</button>
+        </div>
+        <button class="btn ghost" id="demoTry" type="button">覚えたら，自分で指してみる</button>
       </div>
       <div class="panel" id="talk">
         <div class="progress"><span id="bar" style="width:0%"></span></div>
@@ -1081,6 +1102,7 @@ p { margin: 0; line-height: 1.8; }
 
   // ---------- 対局 ----------
   let D, pos, idx, mistakes, moveMistakes, hintsUsed, sel, selHand, lastTo, prevTo, busy, timer, pendingPromo, history, altFound;
+  let mode = 'try', demo = [], demoK = 0, fromSq = null;
 
   function open(drill) {
     D = drill;
@@ -1089,10 +1111,75 @@ p { margin: 0; line-height: 1.8; }
     $('tagline').innerHTML = D.tags.map(t => `<span>${t}</span>`).join('');
     $('sideLabel').textContent = D.side === 's' ? '盤の下側があなた（▲先手）' : '盤の下側があなた（△後手）';
     scrollTo(0, 0);
-    restart();
+    demo = buildDemo();
+    // まだ解いたことがなければ，お手本から始める
+    setMode(best[D.key] ? 'try' : 'demo');
   }
+  function setMode(m) {
+    mode = m;
+    clearTimeout(timer);
+    $('modeDemo').setAttribute('aria-selected', String(m === 'demo'));
+    $('modeTry').setAttribute('aria-selected', String(m === 'try'));
+    $('demoPanel').hidden = m !== 'demo';
+    if (m === 'demo') {
+      $('talk').hidden = true; $('donePanel').hidden = true;
+      showDemo(0);
+    } else {
+      restart();
+    }
+  }
+  $('modeDemo').addEventListener('click', () => setMode('demo'));
+  $('modeTry').addEventListener('click', () => setMode('try'));
+  $('demoTry').addEventListener('click', () => setMode('try'));
+  $('demoPrev').addEventListener('click', () => { if (demoK > 0) showDemo(demoK - 1); });
+  $('demoNext').addEventListener('click', () => { if (demoK < demo.length) showDemo(demoK + 1); });
+
+  // お手本の手順を作る（詰将棋で最後の手が決まっていない時は，詰ます手を探す）
+  function buildDemo() {
+    let p = D.start(), prev = null;
+    const out = [];
+    for (let i = 0; i < D.steps.length; i++) {
+      const st = D.steps[i];
+      const s = st.who === 'me' ? D.side : (D.side === 's' ? 'g' : 's');
+      let mv = st.alts[0] ? parseMove(st.alts[0], s) : null;
+      if (!mv && D.mate) mv = mateIn(p, D.mate - i)[0];
+      if (!mv) break;
+      out.push({ mv, label: notate(p, prev, mv, st), c: st.c || '', who: st.who, from: mv.drop ? null : mv.from });
+      p = apply(p, mv); prev = mv.to;
+      if (D.mate && isMate(p)) break;
+    }
+    return out;
+  }
+  function showDemo(k) {
+    demoK = k;
+    pos = D.start();
+    for (let i = 0; i < k; i++) pos = apply(pos, demo[i].mv);
+    lastTo = k ? demo[k - 1].mv.to : null;
+    fromSq = k ? demo[k - 1].from : null;
+    sel = null; selHand = null; pendingPromo = null;
+    history = demo.slice(0, k).map(d => d.label);
+    idx = k;
+    const d = demo[k - 1];
+    if (!k) {
+      $('demoMove').textContent = D.kind === 'J' ? 'お手本：初手から順に見ていきます' : 'お手本：この局面から';
+      $('demoComment').textContent = D.kind === 'J' ? D.intro : D.question;
+    } else {
+      $('demoMove').textContent = `${k}手目 ${d.label}`;
+      let text = d.c || (d.who === 'opp' ? '相手の手．' : '');
+      if (k === demo.length && D.outro) text = (text ? text + '\n\n' : '') + `【${D.name}】${D.outro}`;
+      if (k === demo.length && D.mate) text = '詰みました．' + (text ? '\n\n' + text : '');
+      $('demoComment').textContent = text;
+    }
+    $('demoComment').style.whiteSpace = 'pre-line';
+    $('demoPrev').disabled = k === 0;
+    $('demoNext').disabled = k >= demo.length;
+    $('demoNext').textContent = k === 0 ? '1手目を見る ▶' : '次の手 ▶';
+    render();
+  }
+
   function restart() {
     clearTimeout(timer);
+    fromSq = null;
     pos = D.start();
     idx = 0; mistakes = 0; moveMistakes = 0; hintsUsed = 0;
     sel = null; selHand = null; lastTo = null; prevTo = null; busy = false; pendingPromo = null;
@@ -1118,7 +1205,7 @@ p { margin: 0; line-height: 1.8; }
         let mv = parseMove(st.alts[0], s);
         const legal = legalMoves(pos, s);
         if (!legal.some(m => str(m) === str(mv))) mv = legal[0]; // 詰将棋で別の手順になった時
-        const label = notate(mv, st);
+        const label = notate(pos, prevTo, mv, st);
         play(mv, label);
         busy = false;
         setComment(st.c ? `相手は${label}．${st.c}` : `相手は${label}と指しました．`);
@@ -1136,23 +1223,23 @@ p { margin: 0; line-height: 1.8; }
     prevTo = mv.to; lastTo = mv.to;
     idx++;
   }
-  function notate(mv, st) {
+  function notate(p, prev, mv, st) {
     if (st && st.label && st.alts[0] === str(mv)) return st.label;
     const mark = mv.s === 's' ? '▲' : '△';
-    const dest = mv.to === prevTo ? '同' : `${mv.to / 10 | 0}${KAN[mv.to % 10]}`;
+    const dest = mv.to === prev ? '同' : `${mv.to / 10 | 0}${KAN[mv.to % 10]}`;
     if (mv.drop) {
-      const couldMove = legalMoves(pos, mv.s).some(m => !m.drop && m.to === mv.to && pos.b[m.from].t === mv.drop && !pos.b[m.from].p);
+      const couldMove = legalMoves(p, mv.s).some(m => !m.drop && m.to === mv.to && p.b[m.from].t === mv.drop && !p.b[m.from].p);
       return `${mark}${dest}${mv.drop}${couldMove ? '打' : ''}`;
     }
-    const pc = pos.b[mv.from];
+    const pc = p.b[mv.from];
     const name = pc.p ? PNAME[pc.t] : pc.t;
-    const opts = legalMoves(pos, mv.s).filter(m => m.from === mv.from && m.to === mv.to);
+    const opts = legalMoves(p, mv.s).filter(m => m.from === mv.from && m.to === mv.to);
     const suffix = opts.length > 1 ? (mv.promote ? '成' : '不成') : (mv.promote ? '成' : '');
     return `${mark}${dest}${name}${suffix}`;
   }
   function setPrompt(t, cls) { const el = $('prompt'); el.textContent = t; el.className = 'prompt ' + cls; }
   function setComment(t) { $('comment').textContent = t || ''; }
-  const myTurn = () => !busy && !isOver() && D.steps[idx].who === 'me' && !pendingPromo;
+  const myTurn = () => mode === 'try' && !busy && !isOver() && D.steps[idx].who === 'me' && !pendingPromo;
 
   function tapSquare(sq) {
     if (!myTurn()) return;
@@ -1204,7 +1291,7 @@ p { margin: 0; line-height: 1.8; }
       if (!mating) ok = false;
     }
     if (ok) {
-      const label = notate(mv, st);
+      const label = notate(pos, prevTo, mv, st);
       play(mv, label);
       sel = null; selHand = null;
       if (alt) altFound = true;
@@ -1278,6 +1365,7 @@ p { margin: 0; line-height: 1.8; }
         const p = pos.b[sq];
         const cls = ['sq'];
         if (sq === lastTo) cls.push('last');
+        if (mode === 'demo' && sq === fromSq) cls.push('from');
         if (sq === sel || (pendingPromo && sq === pendingPromo.from)) cls.push('sel');
         if (hm && ((!hm.drop && sq === hm.from) || (hm.drop && sq === hm.to))) cls.push('hint');
         let label = `${f}${KAN[rk]}`;
@@ -1306,6 +1394,13 @@ p { margin: 0; line-height: 1.8; }
     $('handBottom').innerHTML = `<span>あなた（${me === 's' ? '▲先手' : '△後手'}）の持ち駒</span> ${handHtml(me, true)}`;
 
     // 棋譜
+    if (mode === 'demo') {
+      $('kifu').innerHTML = demo.map((d, i) => `<li class="${i === demoK - 1 ? 'now' : i >= demoK ? 'todo' : ''}"><span class="no">${i + 1}</span><span>${i < demoK ? d.label : '・・・'}</span></li>`).join('');
+      const cur = $('kifu').querySelector('.now');
+      const k = $('kifu'); k.scrollTop = cur ? Math.max(0, cur.offsetTop - k.offsetTop - 60) : 0;
+      $('demoBar').style.width = `${demo.length ? (demoK / demo.length) * 100 : 0}%`;
+      return;
+    }
     const items = history.map((l, i) => `<li><span class="no">${i + 1}</span><span>${l}</span></li>`);
     if (!isOver()) {
       const s = moverOf(idx) === 's' ? '▲' : '△';

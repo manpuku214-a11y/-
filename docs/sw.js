@@ -1,5 +1,5 @@
 // オフライン用：最初に全ファイルを保存し，以後は保存したものを使う
-const CACHE = 'game-box-mwx5hrmt';
+const CACHE = 'game-box-mwx6rfko';
 const FILES = ["./","index.html","lighthouse.html","rosenzu.html","joseki.html","manifest.webmanifest","icon-180.png","icon-192.png","icon-512.png"];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
