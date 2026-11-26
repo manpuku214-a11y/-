@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e8eef0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ゲーム箱">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+img{max-width:100%}[hidden]{display:none!important}
+.app-menu{font:700 12px system-ui,-apple-system,"Hiragino Sans",sans-serif;color:inherit;text-decoration:none;
+ border:1px solid currentColor;border-radius:999px;padding:4px 12px;opacity:.7;background:transparent}
+.app-menu.fixed{position:fixed;z-index:50;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 10px)}
+.app-menu-bar{display:flex;justify-content:flex-end;padding-top:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}</style>
+<title>ちいさな私鉄の路線図</title>
+</head>
+<body>
+<a class="app-menu fixed" href="./">メニュー</a>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Shippori+Mincho+B1:wght@700;800&display=swap">
+<style>
+/* Layout: 方眼紙の地図キャンバスを全面に．上に運行状況，下に路線の切り替え帯，中央にカード型の案内． */
+:root {
+  --paper: #e8eef0;
+  --grid: rgba(40, 70, 90, 0.08);
+  --ink: #1d2a33;
+  --muted: #5d6f7b;
+  --surface: #f6f9fa;
+  --line: rgba(29, 42, 51, 0.16);
+  --danger: #d23b2a;
+  --l1: #d9482b;  /* 朱 */
+  --l2: #1f5fa8;  /* 藍 */
+  --l3: #3c9a5f;  /* 若竹 */
+  --l4: #d89a00;  /* 山吹 */
+  --l5: #7a4fa3;  /* 江戸紫 */
+  --l6: #8a5a3c;  /* 鳶 */
+  --sign: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --ui: "BIZ UDPGothic", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121b21; --grid: rgba(170, 200, 215, 0.06); --ink: #dfe8ec; --muted: #8fa3ae;
+    --surface: #1a252c; --line: rgba(223, 232, 236, 0.16); --danger: #ff6b5a;
+    --l1: #f0603f; --l2: #4f8fd8; --l3: #56b878; --l4: #f0b62a; --l5: #a27ad0; --l6: #c08660;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121b21; --grid: rgba(170, 200, 215, 0.06); --ink: #dfe8ec; --muted: #8fa3ae;
+  --surface: #1a252c; --line: rgba(223, 232, 236, 0.16); --danger: #ff6b5a;
+  --l1: #f0603f; --l2: #4f8fd8; --l3: #56b878; --l4: #f0b62a; --l5: #a27ad0; --l6: #c08660;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--ui);
+  overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+#map { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+.top {
+  position: fixed; top: 0; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  pointer-events: none; font-variant-numeric: tabular-nums;
+}
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat.right { align-items: flex-end; text-align: right; }
+.label { font-size: 11px; letter-spacing: 0.12em; color: var(--muted); }
+.big { font-family: var(--sign); font-weight: 800; font-size: 28px; line-height: 1.05; }
+.mid { font-weight: 700; font-size: 15px; }
+.rails { font-weight: 700; font-size: 15px; }
+.rails.zero { color: var(--danger); }
+
+.bottom {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  padding-top: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; pointer-events: auto; }
+.tab {
+  font: 700 13px var(--ui); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 12px 6px 8px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.tab .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--c); }
+.tab[aria-pressed="true"] { border-color: var(--c); box-shadow: 0 0 0 2px var(--c) inset; }
+.tab:disabled { opacity: 0.45; cursor: default; }
+.tab:disabled .dot { background: transparent; border: 1.5px dashed var(--muted); }
+.tab:focus-visible, .btn:focus-visible, .choice:focus-visible, .remove:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.remove {
+  pointer-events: auto; font: 700 12px var(--ui); color: var(--danger);
+  background: transparent; border: 1px solid currentColor; border-radius: 999px; padding: 4px 12px; cursor: pointer;
+}
+.toast {
+  font-size: 13px; font-weight: 700; color: var(--surface); background: var(--ink);
+  border-radius: 4px; padding: 6px 12px; opacity: 0; transition: opacity .2s; max-width: 100%;
+}
+.toast.show { opacity: 0.92; }
+
+.overlay {
+  position: fixed; inset: 0; display: grid; place-items: center;
+  padding-block: 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: color-mix(in srgb, var(--paper) 55%, transparent);
+  overflow-y: auto;
+}
+.card {
+  width: min(460px, 100%);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 24px; display: flex; flex-direction: column; gap: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+}
+.eyebrow { font-size: 11px; letter-spacing: 0.22em; color: var(--muted); }
+h1, h2 { font-family: var(--sign); font-weight: 800; margin: 0; line-height: 1.2; text-wrap: balance; }
+h1 { font-size: clamp(30px, 8vw, 40px); }
+h2 { font-size: 26px; }
+p { margin: 0; line-height: 1.8; font-size: 14px; }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 13px; line-height: 1.6; }
+.steps li { display: grid; grid-template-columns: 1.6em 1fr; gap: 6px; }
+.steps .n { font-family: var(--sign); font-weight: 800; color: var(--l1); }
+.kinds { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
+.kinds span { display: inline-flex; align-items: center; gap: 4px; }
+.kinds b {
+  font-family: var(--sign); font-weight: 800; font-size: 14px; color: var(--ink);
+  width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--ink);
+  display: inline-grid; place-items: center; background: var(--paper);
+}
+.btn {
+  font: 700 16px var(--ui); color: var(--surface); background: var(--ink);
+  border: 0; border-radius: 4px; padding: 13px 16px; cursor: pointer;
+}
+.choices { display: grid; gap: 8px; }
+.choice {
+  text-align: left; font: 400 13px var(--ui); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.choice b { font-size: 15px; }
+.choice:hover { border-color: var(--ink); }
+.result { display: flex; gap: 24px; font-variant-numeric: tabular-nums; }
+.result .big { font-size: 34px; }
+.note { font-size: 13px; color: var(--muted); }
+</style>
+
+<canvas id="map" aria-label="路線図の盤面"></canvas>
+
+<div class="top">
+  <div class="stat">
+    <span class="label">運んだ乗客</span>
+    <span class="big" id="score">0</span>
+  </div>
+  <div class="stat right">
+    <span class="mid" id="clock">第1週 月曜</span>
+    <span class="rails" id="rails">線路 残り6本</span>
+  </div>
+</div>
+
+<div class="bottom">
+  <div class="toast" id="toast" role="status"></div>
+  <button class="remove" id="removeBtn" type="button" hidden>この路線を撤去</button>
+  <div class="tabs" id="tabs"></div>
+</div>
+
+<div class="overlay" id="titleScreen">
+  <div class="card">
+    <span class="eyebrow">地方私鉄 開業準備室</span>
+    <h1>ちいさな私鉄の路線図</h1>
+    <p>町に駅が少しずつ増えていきます．線路を敷いて，乗客を行きたい場所まで運びましょう．</p>
+    <ul class="steps">
+      <li><span class="n">一</span><span>駅から駅へ<b>ドラッグ</b>すると線路が敷ける．路線の端の駅から伸ばせば延伸できる．</span></li>
+      <li><span class="n">二</span><span>駅の横の漢字が乗客の行き先．電車が乗り換えも含めて自動で運ぶ．</span></li>
+      <li><span class="n">三</span><span>一つの駅に乗客が<b>8人</b>を超えて待ち続けると，苦情が殺到して廃線．</span></li>
+      <li><span class="n">四</span><span>線路は一区間で一本使う．週末ごとに補強を一つ選べる．</span></li>
+    </ul>
+    <div class="kinds">
+      <span><b>湯</b>温泉</span><span><b>港</b>港</span><span><b>校</b>学校</span><span><b>市</b>市場</span><span><b>社</b>神社</span><span><b>寺</b>寺</span>
+    </div>
+    <button class="btn" id="startBtn" type="button">開業する</button>
+  </div>
+</div>
+
+<div class="overlay" id="weekScreen" hidden>
+  <div class="card">
+    <span class="eyebrow" id="weekEyebrow">第1週 終了</span>
+    <h2>今週の予算</h2>
+    <p class="note">線路が2本届きました．さらにどれか一つを選んでください．</p>
+    <div class="choices" id="choices"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overScreen" hidden>
+  <div class="card">
+    <span class="eyebrow">廃線のお知らせ</span>
+    <h2 id="overTitle">駅に苦情が殺到しました</h2>
+    <div class="result">
+      <div><div class="big" id="finalScore">0</div><div class="label">運んだ乗客</div></div>
+      <div><div class="big" id="finalWeeks">1</div><div class="label">営業した週</div></div>
+      <div><div class="big" id="finalBest">0</div><div class="label">最高記録</div></div>
+    </div>
+    <span class="note" id="newBest" hidden>最高記録を更新しました．</span>
+    <button class="btn" id="retryBtn" type="button">もう一度開業する</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('map');
+  const ctx = cv.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- 設定 ----------
+  const TYPES = ['湯', '港', '校', '市', '社', '寺'];
+  const NAMES = {
+    '湯': ['湯元', '湯ノ花', '湯川', '湯沢口', '湯ケ丘', '新湯'],
+    '港': ['港町', '浜港', '北港', '漁港前', '岬港', '南浜'],
+    '校': ['学園前', '高校前', '大学前', '文教町', '学校裏', '書院'],
+    '市': ['市場前', '朝市', '中央市場', '問屋町', '市ノ坪', '商店街'],
+    '社': ['神社前', '宮前', '鳥居町', '宮ノ森', '稲荷口', '社家'],
+    '寺': ['寺町', '山門前', '鐘楼', '本堂前', '観音口', '寺ノ下'],
+  };
+  const LINE_NAMES = ['朱線', '藍線', '若竹線', '山吹線', '紫線', '鳶線'];
+  const DAY = ['月', '火', '水', '木', '金', '土', '日'];
+  const DAY_LEN = 7;          // 1日の秒数
+  const WEEK_LEN = DAY_LEN * 7;
+  const CAP = 8;              // 駅で待てる人数
+  const CROWD_TIME = 22;      // 超過状態が続くと廃線になる秒数
+
+  // ---------- 状態 ----------
+  let W, H, DPR, S, top = 80, bottom = 110, margin = 36;
+  let colors = {};
+  let state = 'title';
+  let stations = [], lines = [], dist = {};
+  let score = 0, elapsed = 0, week = 1, rails = 6, trainCap = 6, speedMul = 1, linesAvail = 3;
+  let stationT = 0, paxT = 0, sel = 0, nextId = 1;
+  let drag = null, hintT = 0;
+  let best = 0;
+  try { best = parseInt(localStorage.getItem('rosenzu-best') || '0', 10) || 0; } catch (e) {}
+
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = n => cs.getPropertyValue(n).trim();
+    colors = {
+      paper: g('--paper'), grid: g('--grid'), ink: g('--ink'), muted: g('--muted'),
+      surface: g('--surface'), danger: g('--danger'),
+      lines: [g('--l1'), g('--l2'), g('--l3'), g('--l4'), g('--l5'), g('--l6')],
+    };
+  }
+  new MutationObserver(() => { readColors(); renderTabs(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); renderTabs(); });
+
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    S = Math.min(W, H);
+    margin = Math.max(30, W * 0.05);
+    top = 78; bottom = 118;
+    for (const s of stations) place(s);
+  }
+  function place(s) {
+    s.x = margin + s.nx * (W - margin * 2);
+    s.y = top + s.ny * (H - top - bottom);
+  }
+
+  // ---------- 駅と乗客 ----------
+  function unlockedTypes() {
+    const n = week >= 4 ? 6 : week >= 3 ? 5 : week >= 2 ? 4 : 3;
+    return TYPES.slice(0, n);
+  }
+  function maxStations() {
+    return Math.min(30, Math.floor(((W - margin * 2) * (H - top - bottom)) / 7200));
+  }
+  function addStation(type) {
+    const minD = Math.max(58, S * 0.11);
+    for (let tries = 0; tries < 80; tries++) {
+      const s = { nx: rand(0, 1), ny: rand(0, 1) };
+      // 最初の数駅は中央寄りに
+      if (stations.length < 3) { s.nx = rand(0.25, 0.75); s.ny = rand(0.25, 0.75); }
+      place(s);
+      if (stations.some(o => Math.hypot(o.x - s.x, o.y - s.y) < minD)) continue;
+      const used = new Set(stations.map(o => o.name));
+      const t = type || pickStationType();
+      const name = NAMES[t].find(n => !used.has(n)) || (NAMES[t][0] + (stations.length + 1));
+      Object.assign(s, { id: nextId++, type: t, name, queue: [], crowd: 0, born: elapsed, pop: 0 });
+      stations.push(s);
+      recompute();
+      return s;
+    }
+    return null;
+  }
+  function pickStationType() {
+    const types = unlockedTypes();
+    // 珍しい種類は出にくく
+    const weights = types.map(t => (t === '湯' || t === '港' || t === '校') ? 3 : 1);
+    let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < types.length; i++) { r -= weights[i]; if (r <= 0) return types[i]; }
+    return types[0];
+  }
+  function spawnPassenger() {
+    if (!stations.length) return;
+    const present = [...new Set(stations.map(s => s.type))];
+    if (present.length < 2) return;
+    const s = pick(stations);
+    const options = present.filter(t => t !== s.type);
+    s.queue.push(pick(options));
+    s.pop = 1;
+  }
+
+  // ---------- 経路（各駅から各種類の駅までの区間数） ----------
+  function recompute() {
+    const adj = new Map(stations.map(s => [s.id, new Set()]));
+    for (const L of lines) {
+      for (let i = 0; i + 1 < L.st.length; i++) {
+        adj.get(L.st[i]).add(L.st[i + 1]);
+        adj.get(L.st[i + 1]).add(L.st[i]);
+      }
+    }
+    dist = {};
+    for (const t of TYPES) {
+      const d = new Map();
+      const q = [];
+      for (const s of stations) if (s.type === t) { d.set(s.id, 0); q.push(s.id); }
+      while (q.length) {
+        const u = q.shift();
+        for (const v of adj.get(u)) if (!d.has(v)) { d.set(v, d.get(u) + 1); q.push(v); }
+      }
+      dist[t] = d;
+    }
+  }
+  const D = (t, id) => (dist[t] && dist[t].has(id)) ? dist[t].get(id) : Infinity;
+  const byId = id => stations.find(s => s.id === id);
+
+  // ---------- 路線 ----------
+  function initLines() {
+    lines = LINE_NAMES.map((name, i) => ({ idx: i, name, st: [], train: null }));
+  }
+  function makeTrain(L) {
+    L.train = { i: 0, dir: 1, prog: 0, stopT: 0.6, cargo: [] };
+  }
+  function connect(L, a, b) {
+    if (a === b) return false;
+    if (rails <= 0) { toast('線路が足りません．週末の予算を待ちましょう'); return false; }
+    if (L.st.length === 0) {
+      L.st = [a, b];
+      makeTrain(L);
+    } else if (L.st.includes(b)) {
+      toast('同じ路線に同じ駅は二度通せません'); return false;
+    } else if (L.st[L.st.length - 1] === a) {
+      L.st.push(b);
+    } else if (L.st[0] === a) {
+      L.st.unshift(b);
+      L.train.i += 1;
+    } else {
+      toast('路線の端の駅から伸ばしてください'); return false;
+    }
+    rails--;
+    recompute();
+    updateHud();
+    renderTabs();
+    return true;
+  }
+  function removeLine(L) {
+    if (!L.st.length) return;
+    rails += L.st.length - 1;
+    L.st = []; L.train = null;
+    recompute(); updateHud(); renderTabs();
+    toast(`${L.name}を撤去しました．線路が戻りました`);
+  }
+
+  // ---------- 電車 ----------
+  function trainSpeed() { return Math.max(70, S * 0.15) * speedMul; }
+  function updateTrain(L, dt) {
+    const tr = L.train;
+    if (!tr || L.st.length < 2) return;
+    if (tr.i >= L.st.length) tr.i = L.st.length - 1;
+    if (tr.i + tr.dir < 0 || tr.i + tr.dir >= L.st.length) tr.dir = -tr.dir;
+    if (tr.stopT > 0) { tr.stopT -= dt; return; }
+    const a = byId(L.st[tr.i]), b = byId(L.st[tr.i + tr.dir]);
+    const len = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+    tr.prog += trainSpeed() * dt / len;
+    if (tr.prog >= 1) {
+      tr.prog = 0;
+      tr.i += tr.dir;
+      if (tr.i === L.st.length - 1) tr.dir = -1;
+      else if (tr.i === 0) tr.dir = 1;
+      stopAt(L, tr);
+    }
+  }
+  function stopAt(L, tr) {
+    const s = byId(L.st[tr.i]);
+    const next = L.st[tr.i + tr.dir];
+    let moved = 0;
+    // 降車
+    const keep = [];
+    for (const p of tr.cargo) {
+      if (p === s.type) { score++; moved++; floatText(s, '+1'); continue; }
+      if (!(D(p, next) < D(p, s.id))) { s.queue.push(p); moved++; continue; } // 乗り換え
+      keep.push(p);
+    }
+    tr.cargo = keep;
+    // 乗車
+    const rest = [];
+    for (const p of s.queue) {
+      if (tr.cargo.length < trainCap && D(p, next) < D(p, s.id)) { tr.cargo.push(p); moved++; }
+      else rest.push(p);
+    }
+    s.queue = rest;
+    tr.stopT = 0.3 + moved * 0.07;
+    if (moved) updateHud();
+  }
+  function trainPos(L) {
+    const tr = L.train;
+    const a = byId(L.st[tr.i]);
+    const j = tr.i + tr.dir;
+    if (j < 0 || j >= L.st.length) return { x: a.x, y: a.y, ang: 0 };
+    const b = byId(L.st[j]);
+    const o = offsetFor(L, a, b);
+    return {
+      x: a.x + (b.x - a.x) * tr.prog + o.x,
+      y: a.y + (b.y - a.y) * tr.prog + o.y,
+      ang: Math.atan2(b.y - a.y, b.x - a.x),
+    };
+  }
+  // 同じ区間に複数路線があるとき，少しずらして描く
+  function offsetFor(L, a, b) {
+    const shared = lines.filter(M => M.st.length && sharesSeg(M, a.id, b.id));
+    if (shared.length < 2) return { x: 0, y: 0 };
+    const k = shared.indexOf(L) - (shared.length - 1) / 2;
+    const [p, q] = a.id < b.id ? [a, b] : [b, a];
+    const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    const nx = -(q.y - p.y) / len, ny = (q.x - p.x) / len;
+    return { x: nx * k * 7, y: ny * k * 7 };
+  }
+  function sharesSeg(M, u, v) {
+    for (let i = 0; i + 1 < M.st.length; i++) {
+      if ((M.st[i] === u && M.st[i + 1] === v) || (M.st[i] === v && M.st[i + 1] === u)) return true;
+    }
+    return false;
+  }
+
+  // ---------- 演出 ----------
+  let floats = [];
+  function floatText(s, txt) { floats.push({ x: s.x, y: s.y - 20, txt, life: 0.9 }); }
+  let toastTimer = 0;
+  function toast(msg) {
+    const el = $('toast');
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
+  // ---------- HUD ----------
+  function updateHud() {
+    $('score').textContent = score;
+    const day = Math.min(6, Math.floor((elapsed % WEEK_LEN) / DAY_LEN));
+    $('clock').textContent = `第${week}週 ${DAY[day]}曜`;
+    $('rails').textContent = `線路 残り${rails}本`;
+    $('rails').classList.toggle('zero', rails === 0);
+  }
+  function renderTabs() {
+    const box = $('tabs');
+    box.innerHTML = '';
+    lines.forEach((L, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'tab'; b.id = 'tab' + i;
+      b.style.setProperty('--c', colors.lines[i]);
+      const locked = i >= linesAvail;
+      b.disabled = locked;
+      b.setAttribute('aria-pressed', String(i === sel && !locked));
+      b.innerHTML = `<span class="dot"></span>${locked ? '未開通' : L.name + (L.st.length ? ` ${L.st.length}駅` : '')}`;
+      b.addEventListener('click', () => { sel = i; renderTabs(); });
+      box.appendChild(b);
+    });
+    $('removeBtn').hidden = !(lines[sel] && lines[sel].st.length) || state !== 'play';
+  }
+  $('removeBtn').addEventListener('click', () => removeLine(lines[sel]));
+
+  // ---------- 入力 ----------
+  function stationAt(x, y, r) {
+    let bestS = null, bd = r;
+    for (const s of stations) {
+      const d = Math.hypot(s.x - x, s.y - y);
+      if (d < bd) { bd = d; bestS = s; }
+    }
+    return bestS;
+  }
+  function chooseLineFor(a) {
+    // 選択中の路線の端なら，その路線を伸ばす
+    const cur = lines[sel];
+    if (!cur.st.length || cur.st[0] === a.id || cur.st[cur.st.length - 1] === a.id) return cur;
+    // 他の路線の端ならそちらに切り替え
+    const other = lines.find((L, i) => i < linesAvail && L.st.length && (L.st[0] === a.id || L.st[L.st.length - 1] === a.id));
+    if (other) return other;
+    // 空いている路線で新しく敷く
+    const empty = lines.find((L, i) => i < linesAvail && !L.st.length);
+    if (empty) return empty;
+    return cur;
+  }
+  cv.addEventListener('pointerdown', e => {
+    if (state !== 'play') return;
+    const r = e.pointerType === 'touch' ? 34 : 24;
+    const s = stationAt(e.clientX, e.clientY, r);
+    if (!s) return;
+    const L = chooseLineFor(s);
+    if (L.idx !== sel) { sel = L.idx; renderTabs(); }
+    drag = { from: s, L, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' };
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    drag.x = e.clientX; drag.y = e.clientY;
+    const s = stationAt(e.clientX, e.clientY, drag.touch ? 26 : 18);
+    if (s && s !== drag.from) {
+      const L = drag.L;
+      const okEnd = !L.st.length || L.st[0] === drag.from.id || L.st[L.st.length - 1] === drag.from.id;
+      if (okEnd && !L.st.includes(s.id)) {
+        if (connect(L, drag.from.id, s.id)) drag.from = s;
+      } else if (!okEnd) {
+        connect(L, drag.from.id, s.id); // 案内を出すため
+        drag = null;
+      }
+    }
+  });
+  const endDrag = () => { drag = null; };
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+  addEventListener('keydown', e => {
+    if (state === 'play' && /^[1-6]$/.test(e.key)) {
+      const i = +e.key - 1;
+      if (i < linesAvail) { sel = i; renderTabs(); }
+    }
+  });
+
+  // ---------- 週末の予算 ----------
+  function weekEnd() {
+    state = 'week';
+    rails += 2;
+    const pool = [];
+    if (linesAvail < 6) pool.push({ k: 'line', t: '新しい路線', d: `${LINE_NAMES[linesAvail]}が使えるようになる` });
+    pool.push({ k: 'rails', t: '線路 3本', d: 'すぐに敷ける線路が増える' });
+    pool.push({ k: 'cap', t: '車両の増結', d: `全路線の定員が ${trainCap} 人から ${trainCap + 3} 人に` });
+    if (speedMul < 1.6) pool.push({ k: 'speed', t: 'ダイヤ改正', d: '全路線の電車が 15% 速くなる' });
+    const opts = [];
+    while (opts.length < 2 && pool.length) opts.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    $('weekEyebrow').textContent = `第${week}週 終了 · 運んだ乗客 ${score}人`;
+    const box = $('choices');
+    box.innerHTML = '';
+    opts.forEach((o, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'choice'; b.id = 'choice' + i;
+      b.innerHTML = `<b>${o.t}</b><span>${o.d}</span>`;
+      b.addEventListener('click', () => {
+        if (o.k === 'line') { linesAvail++; sel = linesAvail - 1; }
+        if (o.k === 'rails') rails += 3;
+        if (o.k === 'cap') trainCap += 3;
+        if (o.k === 'speed') speedMul *= 1.15;
+        week++;
+        $('weekScreen').hidden = true;
+        state = 'play';
+        // 新しい種類の駅を一つ開業
+        const types = unlockedTypes();
+        const missing = types.find(t => !stations.some(s => s.type === t));
+        if (missing && stations.length < maxStations()) addStation(missing);
+        updateHud(); renderTabs();
+      });
+      box.appendChild(b);
+    });
+    $('weekScreen').hidden = false;
+    renderTabs();
+  }
+
+  // ---------- 開始と終了 ----------
+  function start() {
+    readColors();
+    stations = []; initLines(); floats = [];
+    score = 0; elapsed = 0; week = 1; rails = 6; trainCap = 6; speedMul = 1; linesAvail = 3;
+    stationT = 9; paxT = 1.5; sel = 0; nextId = 1; hintT = 0;
+    addStation('湯'); addStation('港'); addStation('校');
+    state = 'play';
+    $('titleScreen').hidden = true; $('overScreen').hidden = true; $('weekScreen').hidden = true;
+    updateHud(); renderTabs();
+  }
+  $('startBtn').addEventListener('click', start);
+  $('retryBtn').addEventListener('click', start);
+
+  function gameOver(s) {
+    state = 'over';
+    drag = null;
+    const isBest = score > best;
+    if (isBest) { best = score; try { localStorage.setItem('rosenzu-best', String(best)); } catch (e) {} }
+    $('overTitle').textContent = `${s.name}駅に苦情が殺到しました`;
+    $('finalScore').textContent = score;
+    $('finalWeeks').textContent = week;
+    $('finalBest').textContent = best;
+    $('newBest').hidden = !isBest;
+    renderTabs();
+    setTimeout(() => { if (state === 'over') $('overScreen').hidden = false; }, 1200);
+  }
+
+  // ---------- 更新 ----------
+  let lastDay = -1;
+  function update(dt) {
+    for (const f of floats) { f.life -= dt; f.y -= dt * 24; }
+    floats = floats.filter(f => f.life > 0);
+    for (const s of stations) s.pop = Math.max(0, s.pop - dt * 3);
+    if (state !== 'play') return;
+
+    elapsed += dt; hintT += dt;
+    const day = Math.floor((elapsed % WEEK_LEN) / DAY_LEN);
+    if (day !== lastDay) { lastDay = day; updateHud(); }
+
+    stationT -= dt;
+    if (stationT <= 0) {
+      if (stations.length < maxStations()) addStation();
+      stationT = Math.max(7, 16 - elapsed / 25) * rand(0.8, 1.2);
+    }
+    paxT -= dt;
+    if (paxT <= 0) {
+      spawnPassenger();
+      const base = Math.max(0.35, 2.4 - elapsed / 70);
+      paxT = base * rand(0.6, 1.4) * Math.sqrt(4 / Math.max(4, stations.length)) * 1.4;
+    }
+
+    for (const L of lines) updateTrain(L, dt);
+
+    for (const s of stations) {
+      if (s.queue.length > CAP) s.crowd = Math.min(1, s.crowd + dt / CROWD_TIME);
+      else s.crowd = Math.max(0, s.crowd - dt / (CROWD_TIME * 1.5));
+      if (s.crowd >= 1) { gameOver(s); return; }
+    }
+
+    if (elapsed >= week * WEEK_LEN) weekEnd();
+  }
+
+  // ---------- 描画 ----------
+  function draw() {
+    ctx.fillStyle = colors.paper;
+    ctx.fillRect(0, 0, W, H);
+    // 方眼
+    ctx.strokeStyle = colors.grid; ctx.lineWidth = 1;
+    const g = 24;
+    ctx.beginPath();
+    for (let x = (W / 2) % g; x < W; x += g) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, H); }
+    for (let y = (H / 2) % g; y < H; y += g) { ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); }
+    ctx.stroke();
+
+    // 路線
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const L of lines) {
+      if (L.st.length < 2) continue;
+      ctx.strokeStyle = colors.lines[L.idx];
+      ctx.lineWidth = 7;
+      for (let i = 0; i + 1 < L.st.length; i++) {
+        const a = byId(L.st[i]), b = byId(L.st[i + 1]);
+        const o = offsetFor(L, a, b);
+        ctx.beginPath(); ctx.moveTo(a.x + o.x, a.y + o.y); ctx.lineTo(b.x + o.x, b.y + o.y); ctx.stroke();
+      }
+      // 終端の車止め
+      for (const [e, n] of [[L.st[0], L.st[1]], [L.st[L.st.length - 1], L.st[L.st.length - 2]]]) {
+        const a = byId(e), b = byId(n);
+        const ang = Math.atan2(a.y - b.y, a.x - b.x);
+        const ex = a.x + Math.cos(ang) * 22, ey = a.y + Math.sin(ang) * 22;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ex - Math.sin(ang) * 8, ey + Math.cos(ang) * 8);
+        ctx.lineTo(ex + Math.sin(ang) * 8, ey - Math.cos(ang) * 8);
+        ctx.stroke();
+      }
+    }
+
+    // ドラッグ中の線
+    if (drag) {
+      ctx.save();
+      ctx.strokeStyle = colors.lines[drag.L.idx];
+      ctx.globalAlpha = 0.6; ctx.lineWidth = 6; ctx.setLineDash([10, 8]);
+      ctx.beginPath(); ctx.moveTo(drag.from.x, drag.from.y); ctx.lineTo(drag.x, drag.y); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 電車
+    for (const L of lines) {
+      if (!L.train || L.st.length < 2) continue;
+      const p = trainPos(L);
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.ang);
+      ctx.fillStyle = colors.lines[L.idx];
+      ctx.strokeStyle = colors.paper; ctx.lineWidth = 2;
+      roundRect(-15, -8, 30, 16, 4); ctx.fill(); ctx.stroke();
+      // 乗客を小さな四角で
+      ctx.fillStyle = colors.paper;
+      const n = L.train.cargo.length;
+      for (let k = 0; k < Math.min(n, 12); k++) {
+        const cx = -11 + (k % 6) * 4.4, cy = k < 6 ? -4 : 1;
+        ctx.fillRect(cx, cy, 3, 3);
+      }
+      ctx.restore();
+    }
+
+    // 駅
+    for (const s of stations) {
+      const age = Math.min(1, (elapsed - s.born) / 0.5);
+      const r = 15 * (0.6 + 0.4 * age);
+      if (s.crowd > 0) {
+        ctx.strokeStyle = colors.danger; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(s.x, s.y, r + 7, -Math.PI / 2, -Math.PI / 2 + s.crowd * Math.PI * 2); ctx.stroke();
+      }
+      ctx.fillStyle = colors.surface;
+      ctx.strokeStyle = colors.ink; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = colors.ink;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `800 ${Math.round(r * 1.05)}px "Shippori Mincho B1", serif`;
+      ctx.fillText(s.type, s.x, s.y + 1);
+      // 駅名
+      ctx.font = '700 11px "BIZ UDPGothic", sans-serif';
+      ctx.fillStyle = colors.muted;
+      ctx.fillText(s.name, s.x, s.y + r + 12);
+      // 待っている乗客
+      const over = s.queue.length > CAP;
+      ctx.font = '800 12px "Shippori Mincho B1", serif';
+      ctx.textAlign = 'left';
+      const show = Math.min(s.queue.length, 12);
+      for (let k = 0; k < show; k++) {
+        const qx = s.x + r + 6 + (k % 4) * 12;
+        const qy = s.y - 8 + Math.floor(k / 4) * 13;
+        ctx.fillStyle = (over && k >= CAP) ? colors.danger : colors.ink;
+        ctx.fillText(s.queue[k], qx, qy);
+      }
+      if (s.queue.length > 12) {
+        ctx.fillStyle = colors.danger;
+        ctx.font = '700 11px "BIZ UDPGothic", sans-serif';
+        ctx.fillText(`+${s.queue.length - 12}`, s.x + r + 6, s.y + 32);
+      }
+    }
+
+    // 得点の浮き文字
+    ctx.textAlign = 'center';
+    ctx.font = '700 13px "BIZ UDPGothic", sans-serif';
+    for (const f of floats) {
+      ctx.globalAlpha = Math.min(1, f.life * 2);
+      ctx.fillStyle = colors.lines[2];
+      ctx.fillText(f.txt, f.x, f.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // 序盤の案内
+    if (state === 'play' && hintT < 14 && lines.every(L => !L.st.length)) {
+      ctx.fillStyle = colors.muted;
+      ctx.font = '700 14px "BIZ UDPGothic", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('駅から駅へドラッグして線路を敷こう', W / 2, H - bottom - 6);
+    }
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  // ---------- ループ ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  readColors();
+  initLines();
+  resize();
+  addEventListener('resize', resize);
+  // タイトル画面の背景用に見本の駅を置く
+  addStation('湯'); addStation('港'); addStation('校'); addStation('市');
+  connect(lines[0], stations[0].id, stations[1].id);
+  connect(lines[0], stations[1].id, stations[2].id);
+  connect(lines[1], stations[2].id, stations[3].id);
+  rails = 6;
+  updateHud(); renderTabs();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script>
+</body>
+</html>
